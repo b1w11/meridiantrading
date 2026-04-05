@@ -43,7 +43,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="flex min-h-full flex-col bg-[var(--page-bg)] text-[var(--foreground)]">
+      <body className="flex min-h-full flex-col bg-background text-foreground">
         <AuthSessionProvider>
           <ThemeProvider>
             <PersistRehydration />

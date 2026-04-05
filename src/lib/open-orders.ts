@@ -13,26 +13,26 @@ export function isOrderCancellableStatus(status: string): boolean {
   );
 }
 
-/** Status pill classes (design tokens: pending / filled / cancelled / error / neutral). */
+/** Tailwind classes for {@link Badge} (pending / filled / cancelled / error / neutral). */
 export function openOrderStatusClass(status: string): string {
   const s = status.toLowerCase().replace(/\s+/g, "");
   if (s.includes("reject") || s.includes("apierror") || s.includes("error")) {
-    return "bg-[var(--status-error-bg)] text-[var(--status-error-fg)]";
+    return "border-0 bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400";
   }
   if (s.includes("cancel")) {
-    return "bg-[var(--status-cancelled-bg)] text-[var(--status-cancelled-fg)]";
+    return "border-0 bg-muted text-muted-foreground";
   }
   if (s.includes("fill")) {
-    return "bg-[var(--status-filled-bg)] text-[var(--status-filled-fg)]";
+    return "border-0 bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400";
   }
   if (
     s.includes("presubmitted") ||
     s.includes("submitted") ||
     s === "pendingsubmit"
   ) {
-    return "bg-[var(--status-pending-bg)] text-[var(--status-pending-fg)]";
+    return "border-0 bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400";
   }
-  return "bg-[var(--status-neutral-bg)] text-[var(--status-neutral-fg)]";
+  return "border-0 bg-muted text-muted-foreground";
 }
 
 export async function deleteIbkrOrderRequest(

@@ -4,6 +4,16 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,74 +49,72 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col items-center justify-center bg-[var(--page-bg)] px-4 py-16">
-      <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-8 shadow-sm">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-[6px] border border-[var(--border)] bg-[var(--page-bg)] text-sm font-semibold text-[var(--foreground)]">
+    <div className="flex min-h-full flex-1 flex-col items-center justify-center bg-background px-4 py-16">
+      <Card className="w-full max-w-sm border-border shadow-none">
+        <CardHeader className="space-y-1 text-center">
+          <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-md border border-border bg-muted/30 text-sm font-semibold">
             M
           </div>
-          <h1 className="text-lg font-semibold tracking-tight text-[var(--foreground)]">
-            Meridian
-          </h1>
-          <p className="mt-1 text-xs text-[var(--foreground-muted)]">
-            Sign in to continue
-          </p>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]"
+          <CardTitle className="text-xl font-semibold">Meridian</CardTitle>
+          <CardDescription>Sign in to continue</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label
+                htmlFor="email"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                Email
+              </label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                className="shadow-none"
+              />
+            </div>
+            <div className="space-y-2">
+              <label
+                htmlFor="password"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                Password
+              </label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="shadow-none"
+              />
+            </div>
+            {error ? (
+              <p
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-500 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400"
+                role="alert"
+              >
+                {error}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              disabled={pending}
+              className="h-11 w-full shadow-none"
             >
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--page-bg)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition-shadow placeholder:text-[var(--foreground-subtle)] focus:border-[var(--foreground-muted)] focus:ring-1 focus:ring-[var(--foreground-muted)]"
-              placeholder="you@company.com"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--page-bg)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition-shadow placeholder:text-[var(--foreground-subtle)] focus:border-[var(--foreground-muted)] focus:ring-1 focus:ring-[var(--foreground-muted)]"
-            />
-          </div>
-          {error ? (
-            <p
-              className="rounded-[6px] border border-[var(--short)]/30 bg-[var(--short-bg)] px-3 py-2 text-xs text-[var(--short)]"
-              role="alert"
-            >
-              {error}
-            </p>
-          ) : null}
-          <button
-            type="submit"
-            disabled={pending}
-            className="h-12 w-full rounded-[6px] bg-[var(--foreground)] px-3 py-2 text-sm font-semibold text-[var(--surface)] transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {pending ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-      </div>
+              {pending ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -115,7 +123,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-full flex-1 items-center justify-center bg-[var(--page-bg)] text-sm text-[var(--foreground-muted)]">
+        <div className="flex min-h-full flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
           Loading…
         </div>
       }

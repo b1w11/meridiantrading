@@ -3,6 +3,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Topbar } from "@/components/trading/Topbar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { formatDateTimeStable } from "@/lib/format-display";
 import { normalizeLiveOrders } from "@/lib/ibkr-normalize";
 import { buildRulePriceData, ruleNeedsHistory } from "@/lib/rule-engine";
@@ -373,24 +391,24 @@ export default function RulesDashboard() {
     form.conditionType !== "MA_CROSS_BELOW";
 
   return (
-    <div className="flex min-h-screen min-h-0 flex-col overflow-hidden bg-[var(--page-bg)] text-[var(--foreground)]">
+    <div className="flex min-h-screen min-h-0 flex-col overflow-hidden bg-background text-foreground">
       <Topbar />
       {engineStatus.killSwitch ? (
         <div
-          className="shrink-0 animate-pulse bg-[var(--short)] py-2.5 text-center text-sm font-semibold text-white"
+          className="shrink-0 animate-pulse bg-red-600 py-3 text-center text-sm font-semibold text-white"
           role="alert"
         >
           Kill switch active — all automated trading is halted
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-        <div className="flex shrink-0 flex-wrap items-start justify-between gap-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 md:p-4">
+        <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">
+            <h1 className="text-lg font-semibold tracking-tight md:text-xl">
               Rules engine
             </h1>
-            <p className="mt-1 text-xs text-[var(--foreground-muted)]">
+            <p className="mt-1 text-xs text-muted-foreground md:text-sm">
               Last check:{" "}
               {engineStatus.lastChecked
                 ? formatDateTimeStable(engineStatus.lastChecked)
@@ -400,89 +418,104 @@ export default function RulesDashboard() {
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
+              className="shadow-none"
               onClick={() => {
                 const s = useRulesStore.getState().engineStatus;
                 setEngineStatus({ ...s, running: !s.running });
               }}
-              className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--hover-row)]"
             >
               {engineStatus.running ? "Pause engine" : "Resume engine"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
+              className="shadow-none"
               onClick={() => void runServerEvaluate()}
               disabled={serverEvalBusy}
-              className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--hover-row)] disabled:opacity-50"
             >
               {serverEvalBusy ? "Evaluating…" : "Server evaluate (no orders)"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
+              className="text-red-500 shadow-none hover:bg-red-50 dark:hover:bg-red-950/30"
               onClick={() => void handleCancelAllIbkrOrders()}
               disabled={cancelAllOrdersBusy}
-              className="rounded-[6px] border border-[var(--short)]/40 bg-[var(--surface)] px-3 py-2 text-xs font-semibold text-[var(--short)] transition-colors hover:bg-[var(--short-bg)] disabled:opacity-50"
             >
               {cancelAllOrdersBusy ? "Cancelling…" : "Cancel all IBKR orders"}
-            </button>
+            </Button>
             {engineStatus.killSwitch ? (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
+                className="shadow-none"
                 onClick={() => setKillSwitch(false)}
-                className="rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--hover-row)]"
               >
                 Disengage kill switch
-              </button>
+              </Button>
             ) : null}
             {!engineStatus.killSwitch ? (
-              <button
+              <Button
                 type="button"
+                variant="destructive"
+                size="lg"
+                className="shadow-none bg-red-600 text-white hover:bg-red-600/90"
                 onClick={() => setKillSwitch(true)}
-                className="rounded-[6px] bg-[var(--short)] px-5 py-2.5 text-sm font-bold tracking-wide text-white shadow-md transition-opacity hover:opacity-95"
               >
                 Kill switch
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
 
+        <Separator />
+
         {serverEvalResult ? (
-          <p className="shrink-0 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--foreground-muted)]">
-            {serverEvalResult}
-          </p>
+          <Card className="shrink-0 border-border py-3 shadow-none">
+            <CardContent className="px-4 py-0 text-xs text-muted-foreground">
+              {serverEvalResult}
+            </CardContent>
+          </Card>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
-          <aside className="flex min-h-0 flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[400px_1fr] gap-6 overflow-hidden">
+          <aside className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
+            <div className="flex shrink-0 items-center justify-between gap-1">
+              <h2 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
                 Rules
               </h2>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 text-green-600 shadow-none hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/30"
                 onClick={() => {
                   setSelectedId(null);
                   setForm(emptyForm);
                   setJsonText("");
                   setEditorTab("builder");
                 }}
-                className="text-xs font-semibold text-[var(--long)] hover:underline"
               >
                 + New rule
-              </button>
+              </Button>
             </div>
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden pr-1">
               {rules.length === 0 ? (
-                <p className="text-sm text-[var(--foreground-muted)]">
-                  No rules yet.
-                </p>
+                <p className="text-sm text-muted-foreground">No rules yet.</p>
               ) : (
                 rules.map((r) => (
-                  <div
+                  <Card
                     key={r.id}
                     role="button"
                     tabIndex={0}
+                    size="sm"
                     onClick={() => setSelectedId(r.id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -490,426 +523,439 @@ export default function RulesDashboard() {
                         setSelectedId(r.id);
                       }
                     }}
-                    className={`cursor-pointer rounded-[var(--radius-card)] border p-3 text-left transition-colors ${
+                    className={cn(
+                      "cursor-pointer py-2 shadow-none transition-colors",
                       selectedId === r.id
-                        ? "border-[var(--foreground-muted)] bg-[var(--surface)] shadow-sm"
-                        : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--foreground-subtle)]"
-                    }`}
+                        ? "ring-2 ring-foreground/20"
+                        : "hover:bg-muted/40",
+                    )}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-[var(--foreground)]">
-                          {r.name}
-                        </p>
-                        <p className="mt-0.5 font-mono text-[11px] text-[var(--foreground-muted)]">
-                          {r.symbol}
-                        </p>
-                        <p className="mt-2 text-xs text-[var(--foreground-muted)]">
-                          <span className="font-medium text-[var(--foreground)]">
-                            If
-                          </span>{" "}
-                          {conditionSummary(r)}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--foreground-muted)]">
-                          <span className="font-medium text-[var(--foreground)]">
-                            Then
-                          </span>{" "}
-                          {actionSummary(r)}
-                        </p>
-                        <p className="mt-2 font-mono text-[10px] text-[var(--foreground-subtle)]">
-                          Last:{" "}
-                          {r.lastTriggered
-                            ? formatDateTimeStable(r.lastTriggered)
-                            : "never"}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-2">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={r.enabled}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleRule(r.id);
-                          }}
-                          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
-                            r.enabled ? "bg-[var(--long)]" : "bg-[var(--border)]"
-                          }`}
-                        >
-                          <span
-                            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-[left] duration-200 ${
-                              r.enabled ? "left-[26px]" : "left-1"
-                            }`}
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteRule(r.id);
-                            if (selectedId === r.id) setSelectedId(null);
-                          }}
-                          className="rounded-[6px] p-1 text-[var(--short)] transition-colors hover:bg-[var(--short-bg)]"
-                          aria-label={`Delete ${r.name}`}
-                        >
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            aria-hidden
+                    <CardHeader className="gap-2 px-3 py-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <CardTitle className="truncate text-sm font-semibold">
+                            {r.name}
+                          </CardTitle>
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {r.symbol}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-2">
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "cursor-pointer border-0 font-normal",
+                              r.enabled
+                                ? "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400"
+                                : "bg-muted text-muted-foreground",
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleRule(r.id);
+                            }}
                           >
-                            <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14M10 11v6M14 11v6" />
-                          </svg>
-                        </button>
+                            {r.enabled ? "Enabled" : "Disabled"}
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="size-7 text-red-500 shadow-none hover:bg-red-50 dark:hover:bg-red-950/30"
+                            aria-label={`Delete ${r.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteRule(r.id);
+                              if (selectedId === r.id) setSelectedId(null);
+                            }}
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              aria-hidden
+                            >
+                              <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14M10 11v6M14 11v6" />
+                            </svg>
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    </CardHeader>
+                    <CardContent className="space-y-1 px-3 pt-2 pb-0 text-xs text-muted-foreground">
+                      <p>
+                        <span className="font-medium text-foreground">If</span>{" "}
+                        {conditionSummary(r)}
+                      </p>
+                      <p>
+                        <span className="font-medium text-foreground">Then</span>{" "}
+                        {actionSummary(r)}
+                      </p>
+                      <p className="font-mono text-[10px] text-muted-foreground/80">
+                        Last:{" "}
+                        {r.lastTriggered
+                          ? formatDateTimeStable(r.lastTriggered)
+                          : "never"}
+                      </p>
+                    </CardContent>
+                  </Card>
                 ))
               )}
             </div>
 
-            <div className="flex min-h-[200px] max-h-[40vh] shrink-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--terminal-bg)]">
-              <div className="border-b border-[var(--border)] px-3 py-2">
-                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground-subtle)]">
-                  Engine log
-                </h2>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-2 font-mono text-[11px] text-[var(--terminal-fg)]">
-                {engineLog.length === 0 ? (
-                  <p className="p-2 text-[var(--foreground-subtle)]">
-                    No evaluations yet.
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {engineLog.map((e) => (
-                      <li key={e.id} className="border-b border-[var(--border)]/50 pb-2 last:border-0">
-                        <div className="text-[10px] text-[var(--foreground-subtle)]">
-                          {formatDateTimeStable(e.timestamp)}
-                        </div>
-                        <div className="text-[var(--terminal-fg)]">{e.ruleName}</div>
-                        <div
-                          className={
-                            e.conditionMet ? "text-[var(--long)]" : "text-[var(--foreground-muted)]"
-                          }
+            <Card className="flex shrink-0 flex-col overflow-hidden py-0 shadow-none">
+              <CardHeader className="shrink-0 border-b border-border py-2">
+                <CardTitle className="text-xs font-medium">Engine log</CardTitle>
+              </CardHeader>
+              <ScrollArea className="h-[200px] w-full">
+                <div className="p-3 font-mono text-xs leading-snug">
+                  {engineLog.length === 0 ? (
+                    <p className="text-muted-foreground">No evaluations yet.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {engineLog.map((e) => (
+                        <li
+                          key={e.id}
+                          className="border-b border-border pb-2 last:border-0"
                         >
-                          Condition: {e.conditionMet ? "met" : "not met"}
-                          {e.actionTaken !== "none"
-                            ? ` · ${e.actionTaken.replace("_", " ")}`
-                            : ""}
-                          {e.reason ? (
-                            <span className="text-[var(--short)]"> — {e.reason}</span>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {formatDateTimeStable(e.timestamp)}
+                          </div>
+                          <div className="text-foreground">{e.ruleName}</div>
+                          <div
+                            className={
+                              e.conditionMet
+                                ? "text-green-600"
+                                : "text-muted-foreground"
+                            }
+                          >
+                            Condition: {e.conditionMet ? "met" : "not met"}
+                            {e.actionTaken !== "none"
+                              ? ` · ${e.actionTaken.replace("_", " ")}`
+                              : ""}
+                            {e.reason ? (
+                              <span className="text-red-500"> — {e.reason}</span>
+                            ) : null}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </ScrollArea>
+            </Card>
 
-            <div className="flex max-h-[28vh] shrink-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--terminal-bg)]">
-              <div className="border-b border-[var(--border)] px-3 py-2">
-                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground-subtle)]">
+            <Card className="flex shrink-0 flex-col overflow-hidden py-0 shadow-none">
+              <CardHeader className="shrink-0 border-b border-border py-2">
+                <CardTitle className="text-xs font-medium">
                   Order attempts
-                </h2>
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto p-2 font-mono text-[11px]">
-                {orderAttemptLog.length === 0 ? (
-                  <p className="p-2 text-[var(--foreground-subtle)]">
-                    No order attempts yet.
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {orderAttemptLog.map((o) => (
-                      <li
-                        key={o.id}
-                        className="border-b border-[var(--border)]/50 pb-2 last:border-0"
-                      >
-                        <div className="text-[10px] text-[var(--foreground-subtle)]">
-                          {formatDateTimeStable(o.timestamp)}
-                        </div>
-                        <div className="text-[var(--terminal-fg)]">{o.ruleName}</div>
-                        <div
-                          className={
-                            o.outcome === "placed"
-                              ? "text-[var(--long)]"
-                              : o.outcome === "failed"
-                                ? "text-[var(--short)]"
-                                : "text-[var(--foreground-muted)]"
-                          }
+                </CardTitle>
+              </CardHeader>
+              <ScrollArea className="h-[200px] w-full">
+                <div className="p-3 font-mono text-xs leading-snug">
+                  {orderAttemptLog.length === 0 ? (
+                    <p className="text-muted-foreground">
+                      No order attempts yet.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {orderAttemptLog.map((o) => (
+                        <li
+                          key={o.id}
+                          className="border-b border-border pb-2 last:border-0"
                         >
-                          {o.outcome} — {o.reason}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {formatDateTimeStable(o.timestamp)}
+                          </div>
+                          <div>{o.ruleName}</div>
+                          <div
+                            className={
+                              o.outcome === "placed"
+                                ? "text-green-600"
+                                : o.outcome === "failed"
+                                  ? "text-red-500"
+                                  : "text-muted-foreground"
+                            }
+                          >
+                            {o.outcome} — {o.reason}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </ScrollArea>
+            </Card>
           </aside>
 
-          <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)]">
-            <div className="flex gap-1 border-b border-[var(--border)] p-2">
-              <button
-                type="button"
-                onClick={() => setEditorTab("builder")}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                  editorTab === "builder"
-                    ? "bg-[var(--foreground)] text-[var(--surface)]"
-                    : "text-[var(--foreground-muted)] hover:bg-[var(--hover-row)]"
-                }`}
-              >
-                UI Builder
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditorTab("code")}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                  editorTab === "code"
-                    ? "bg-[var(--foreground)] text-[var(--surface)]"
-                    : "text-[var(--foreground-muted)] hover:bg-[var(--hover-row)]"
-                }`}
-              >
-                Code (JSON)
-              </button>
-            </div>
+          <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-none">
+            <Tabs
+              value={editorTab}
+              onValueChange={(v) => {
+                if (v === "builder" || v === "code") setEditorTab(v);
+              }}
+              className="flex min-h-0 flex-1 flex-col gap-0"
+            >
+              <div className="shrink-0 border-b border-border px-3 pt-3">
+                <TabsList variant="line" className="shadow-none">
+                  <TabsTrigger value="builder" className="text-xs shadow-none">
+                    UI Builder
+                  </TabsTrigger>
+                  <TabsTrigger value="code" className="text-xs shadow-none">
+                    Code (JSON)
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {editorTab === "builder" ? (
-                <div className="mx-auto max-w-md space-y-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--page-bg)] p-5">
-                  <div>
-                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
-                      Rule
-                    </h3>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                          Name
-                        </label>
-                        <input
-                          value={form.name}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, name: e.target.value }))
-                          }
-                          className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                          Symbol
-                        </label>
-                        <input
-                          value={form.symbol}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, symbol: e.target.value }))
-                          }
-                          className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm text-[var(--foreground)]"
-                          placeholder="AAPL"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                          Conid
-                        </label>
-                        <input
-                          value={form.conid}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, conid: e.target.value }))
-                          }
-                          className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm text-[var(--foreground)]"
-                          placeholder="265598"
-                        />
+              <TabsContent
+                value="builder"
+                className="min-h-0 flex-1 overflow-y-auto p-4 outline-none"
+              >
+                <Card className="mx-auto max-w-md border-border shadow-none">
+                  <CardContent className="space-y-6 p-6">
+                    <div>
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Rule
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Name
+                          </label>
+                          <Input
+                            value={form.name}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, name: e.target.value }))
+                            }
+                            className="shadow-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Symbol
+                          </label>
+                          <Input
+                            value={form.symbol}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, symbol: e.target.value }))
+                            }
+                            placeholder="AAPL"
+                            className="font-mono shadow-none"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Conid
+                          </label>
+                          <Input
+                            value={form.conid}
+                            onChange={(e) =>
+                              setForm((f) => ({ ...f, conid: e.target.value }))
+                            }
+                            placeholder="265598"
+                            className="font-mono shadow-none"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="border-t border-[var(--border)] pt-4">
-                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
-                      Condition
-                    </h3>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                          Type
-                        </label>
-                        <select
-                          value={form.conditionType}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              conditionType: e.target.value as RuleConditionType,
-                            }))
-                          }
-                          className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]"
-                        >
-                          {CONDITION_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {showConditionNumber ? (
-                        <div>
-                          <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                            Value
+                    <Separator />
+
+                    <div>
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Condition
+                      </h3>
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Type
                           </label>
-                          <input
+                          <select
+                            value={form.conditionType}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                conditionType: e.target.value as RuleConditionType,
+                              }))
+                            }
+                            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-none outline-none"
+                          >
+                            {CONDITION_OPTIONS.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        {showConditionNumber ? (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-muted-foreground">
+                              Value
+                            </label>
+                            <Input
+                              type="number"
+                              step="any"
+                              value={form.conditionValue}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  conditionValue: e.target.value,
+                                }))
+                              }
+                              className="font-mono shadow-none"
+                            />
+                          </div>
+                        ) : form.conditionType === "TIME_AT" ? (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-muted-foreground">
+                              Time (HH:MM)
+                            </label>
+                            <Input
+                              value={form.conditionValue}
+                              onChange={(e) =>
+                                setForm((f) => ({
+                                  ...f,
+                                  conditionValue: e.target.value,
+                                }))
+                              }
+                              placeholder="09:30"
+                              className="font-mono shadow-none"
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Uses 20-period MA on daily closes from price
+                            history.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div>
+                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Action
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Side
+                          </label>
+                          <select
+                            value={form.side}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                side: e.target.value as "long" | "short",
+                              }))
+                            }
+                            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-none"
+                          >
+                            <option value="long">Long</option>
+                            <option value="short">Short</option>
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Order type
+                          </label>
+                          <select
+                            value={form.orderType}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                orderType: e.target.value as "MKT" | "LMT",
+                              }))
+                            }
+                            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-none"
+                          >
+                            <option value="MKT">MKT</option>
+                            <option value="LMT">LMT</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Quantity
+                        </label>
+                        <Input
+                          type="number"
+                          min={0.0001}
+                          step="any"
+                          value={form.quantity}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, quantity: e.target.value }))
+                          }
+                          className="font-mono shadow-none"
+                        />
+                      </div>
+                      {form.orderType === "LMT" ? (
+                        <div className="mt-3 space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Limit price
+                          </label>
+                          <Input
                             type="number"
                             step="any"
-                            value={form.conditionValue}
+                            value={form.price}
                             onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                conditionValue: e.target.value,
-                              }))
+                              setForm((f) => ({ ...f, price: e.target.value }))
                             }
-                            className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm text-[var(--foreground)]"
+                            className="font-mono shadow-none"
                           />
                         </div>
-                      ) : form.conditionType === "TIME_AT" ? (
-                        <div>
-                          <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                            Time (HH:MM)
-                          </label>
-                          <input
-                            value={form.conditionValue}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                conditionValue: e.target.value,
-                              }))
-                            }
-                            placeholder="09:30"
-                            className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm text-[var(--foreground)]"
-                          />
-                        </div>
-                      ) : (
-                        <p className="text-xs text-[var(--foreground-muted)]">
-                          Uses 20-period MA on daily closes from price history.
-                        </p>
-                      )}
+                      ) : null}
                     </div>
-                  </div>
 
-                  <div className="border-t border-[var(--border)] pt-4">
-                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
-                      Action
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                          Side
-                        </label>
-                        <select
-                          value={form.side}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              side: e.target.value as "long" | "short",
-                            }))
-                          }
-                          className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]"
-                        >
-                          <option value="long">Long</option>
-                          <option value="short">Short</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                          Order type
-                        </label>
-                        <select
-                          value={form.orderType}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              orderType: e.target.value as "MKT" | "LMT",
-                            }))
-                          }
-                          className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)]"
-                        >
-                          <option value="MKT">MKT</option>
-                          <option value="LMT">LMT</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                        Quantity
-                      </label>
+                    <label className="flex items-center gap-2 text-sm">
                       <input
-                        type="number"
-                        min={0.0001}
-                        step="any"
-                        value={form.quantity}
+                        type="checkbox"
+                        checked={form.enabled}
                         onChange={(e) =>
-                          setForm((f) => ({ ...f, quantity: e.target.value }))
+                          setForm((f) => ({ ...f, enabled: e.target.checked }))
                         }
-                        className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm text-[var(--foreground)]"
+                        className="rounded border-input"
                       />
-                    </div>
-                    {form.orderType === "LMT" ? (
-                      <div className="mt-3">
-                        <label className="mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]">
-                          Limit price
-                        </label>
-                        <input
-                          type="number"
-                          step="any"
-                          value={form.price}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, price: e.target.value }))
-                          }
-                          className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm text-[var(--foreground)]"
-                        />
-                      </div>
+                      Enabled
+                    </label>
+                    {builderError ? (
+                      <p className="text-sm text-red-500">{builderError}</p>
                     ) : null}
-                  </div>
+                    <Button
+                      type="button"
+                      className="h-11 w-full shadow-none"
+                      onClick={handleSaveBuilder}
+                    >
+                      Save rule
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-                  <label className="flex items-center gap-2 text-sm text-[var(--foreground)]">
-                    <input
-                      type="checkbox"
-                      checked={form.enabled}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, enabled: e.target.checked }))
-                      }
-                      className="rounded border-[var(--border)]"
-                    />
-                    Enabled
-                  </label>
-                  {builderError ? (
-                    <p className="text-sm text-[var(--short)]">{builderError}</p>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={handleSaveBuilder}
-                    className="h-11 w-full rounded-[6px] bg-[var(--foreground)] text-sm font-semibold text-[var(--surface)] transition-opacity hover:opacity-90"
-                  >
-                    Save rule
-                  </button>
-                </div>
-              ) : (
-                <div className="mx-auto max-w-xl space-y-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--page-bg)] p-5">
-                  <p className="text-xs text-[var(--foreground-muted)]">
-                    Paste a full JSON object matching the Rule type. Required
-                    fields: id, name, symbol, conid, conditionType,
-                    conditionValue, action, enabled, createdAt.
-                  </p>
-                  <textarea
-                    value={jsonText}
-                    onChange={(e) => {
-                      setJsonText(e.target.value);
-                      setJsonError(null);
-                    }}
-                    rows={18}
-                    className="w-full rounded-[6px] border border-[var(--border)] bg-[var(--terminal-bg)] p-3 font-mono text-xs text-[var(--terminal-fg)]"
-                    spellCheck={false}
-                    placeholder={`{
+              <TabsContent
+                value="code"
+                className="min-h-0 flex-1 overflow-y-auto p-4 outline-none"
+              >
+                <Card className="mx-auto max-w-xl border-border shadow-none">
+                  <CardContent className="space-y-4 p-6">
+                    <p className="text-xs text-muted-foreground">
+                      Paste a full JSON object matching the Rule type. Required
+                      fields: id, name, symbol, conid, conditionType,
+                      conditionValue, action, enabled, createdAt.
+                    </p>
+                    <textarea
+                      value={jsonText}
+                      onChange={(e) => {
+                        setJsonText(e.target.value);
+                        setJsonError(null);
+                      }}
+                      rows={18}
+                      className="w-full resize-y rounded-lg border border-input bg-muted/30 p-3 font-mono text-xs shadow-none outline-none"
+                      spellCheck={false}
+                      placeholder={`{
   "id": "…",
   "name": "RSI dip",
   "symbol": "AAPL",
@@ -920,20 +966,21 @@ export default function RulesDashboard() {
   "enabled": true,
   "createdAt": "2026-01-01T00:00:00.000Z"
 }`}
-                  />
-                  {jsonError ? (
-                    <p className="text-sm text-[var(--short)]">{jsonError}</p>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={handleSaveJson}
-                    className="rounded-[6px] bg-[var(--foreground)] px-4 py-2 text-sm font-semibold text-[var(--surface)] hover:opacity-90"
-                  >
-                    Validate & save
-                  </button>
-                </div>
-              )}
-            </div>
+                    />
+                    {jsonError ? (
+                      <p className="text-sm text-red-500">{jsonError}</p>
+                    ) : null}
+                    <Button
+                      type="button"
+                      className="shadow-none"
+                      onClick={handleSaveJson}
+                    >
+                      Validate & save
+                    </Button>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </main>
         </div>
       </div>

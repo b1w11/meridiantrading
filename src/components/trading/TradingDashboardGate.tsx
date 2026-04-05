@@ -7,7 +7,7 @@ const TradingDashboard = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4 text-sm text-zinc-500">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 text-sm text-muted-foreground">
         Loading workspace…
       </div>
     ),

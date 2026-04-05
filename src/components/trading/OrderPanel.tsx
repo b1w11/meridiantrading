@@ -1,12 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { PnlSummary } from "@/lib/ibkr-normalize";
+import type { WatchlistEntry } from "@/lib/watchlist-constants";
 import { formatMoneyStable } from "@/lib/format-display";
+import { cn } from "@/lib/utils";
 import { useTradingStore } from "@/store/trading";
-
-import type { WatchlistEntry } from "./Watchlist";
 
 export type OrderFormValues = {
   symbol: string;
@@ -22,6 +38,11 @@ export type OrderFeedback = {
   text: string;
 };
 
+function pnlHasActivity(p: PnlSummary): boolean {
+  const nums = [p.dayPnL, p.unrealizedPnL, p.totalPnL];
+  return nums.some((n) => n != null && Number.isFinite(n) && Math.abs(n) > 1e-9);
+}
+
 type OrderPanelProps = {
   watchlist: WatchlistEntry[];
   pnl: PnlSummary;
@@ -29,12 +50,6 @@ type OrderPanelProps = {
   feedback: OrderFeedback | null;
   submitting: boolean;
 };
-
-const inputClass =
-  "w-full rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-sm text-[var(--foreground)] outline-none transition-shadow placeholder:text-[var(--foreground-subtle)] focus:border-[var(--foreground-muted)] focus:ring-1 focus:ring-[var(--foreground-muted)]";
-
-const labelClass =
-  "mb-1 block text-[11px] font-medium text-[var(--foreground-muted)]";
 
 export function OrderPanel({
   watchlist,
@@ -59,6 +74,7 @@ export function OrderPanel({
   }, [activeTicker, watchlist]);
 
   const showPrice = orderType === "LMT" || orderType === "STP";
+  const showPnlGrid = useMemo(() => pnlHasActivity(pnl), [pnl]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,197 +90,267 @@ export function OrderPanel({
     });
   }
 
-  const pnlCard = (label: string, value: number, valueClass?: string) => (
-    <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface-elevated)] p-3">
-      <div className="text-[10px] font-medium uppercase tracking-wider text-[var(--foreground-muted)]">
-        {label}
-      </div>
-      <div
-        className={`mt-1 font-mono text-lg font-semibold tabular-nums tracking-tight ${valueClass ?? "text-[var(--foreground)]"}`}
-      >
-        {value >= 0 ? "+" : ""}
-        {formatMoneyStable(value)}
-      </div>
-    </div>
-  );
+  function pnlMiniCard(
+    label: string,
+    value: number,
+    valueClass?: string,
+  ) {
+    return (
+      <Card size="sm" className="shadow-none">
+        <CardHeader className="pb-1">
+          <CardDescription className="text-[10px] font-medium uppercase tracking-wide">
+            {label}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p
+            className={cn(
+              "font-mono text-base font-semibold tabular-nums",
+              valueClass ?? "text-foreground",
+            )}
+          >
+            {value >= 0 ? "+" : ""}
+            {formatMoneyStable(value)}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <aside className="flex min-h-0 w-[300px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--surface)]">
-      <div className="border-b border-[var(--border)] px-3 py-2.5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
-          Order
-        </h2>
-      </div>
-      <form
-        onSubmit={handleSubmit}
-        className="flex flex-1 flex-col gap-4 overflow-y-auto p-3"
-      >
-        <div className="grid grid-cols-2 gap-2">
-          {pnlCard(
-            "Day P&L",
-            pnl.dayPnL,
-            pnl.dayPnL >= 0 ? "text-[var(--long)]" : "text-[var(--short)]",
-          )}
-          {pnlCard(
-            "Unrealized",
-            pnl.unrealizedPnL,
-            pnl.unrealizedPnL >= 0 ? "text-[var(--long)]" : "text-[var(--short)]",
-          )}
-          {pnlCard(
-            "Net liquidation",
-            pnl.totalPnL,
-            pnl.totalPnL >= 0 ? "text-[var(--long)]" : "text-[var(--short)]",
-          )}
-          <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface-elevated)] p-3">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-[var(--foreground-muted)]">
-              Realized (session)
+    <Card className="flex h-full max-h-full min-h-0 w-[300px] shrink-0 flex-col gap-0 rounded-none border-l border-t-0 border-r-0 border-b-0 py-0 shadow-none">
+      <CardHeader className="shrink-0 space-y-1 border-b border-border py-3">
+        <CardTitle className="text-sm font-medium">Order</CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">
+          Active{" "}
+          <span className="font-mono text-muted-foreground">{activeTicker}</span>
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden p-0">
+        {showPnlGrid ? (
+          <div className="shrink-0 border-b border-border p-3">
+            <div className="grid grid-cols-2 gap-2">
+              {pnlMiniCard(
+                "Day P&L",
+                pnl.dayPnL,
+                pnl.dayPnL >= 0 ? "text-green-600" : "text-red-500",
+              )}
+              {pnlMiniCard(
+                "Unrealized",
+                pnl.unrealizedPnL,
+                pnl.unrealizedPnL >= 0 ? "text-green-600" : "text-red-500",
+              )}
+              {pnlMiniCard(
+                "Net liq.",
+                pnl.totalPnL,
+                pnl.totalPnL >= 0 ? "text-green-600" : "text-red-500",
+              )}
+              <Card size="sm" className="shadow-none">
+                <CardHeader className="pb-1">
+                  <CardDescription className="text-[10px] font-medium uppercase tracking-wide">
+                    Realized
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="font-mono text-base font-semibold tabular-nums text-muted-foreground">
+                    —
+                  </p>
+                </CardContent>
+              </Card>
             </div>
-            <div className="mt-1 font-mono text-lg font-semibold tabular-nums text-[var(--foreground-muted)]">
-              —
-            </div>
           </div>
-        </div>
-        <p className="-mt-1 text-center text-[10px] text-[var(--foreground-subtle)]">
-          Active:{" "}
-          <span className="font-mono text-[var(--foreground-muted)]">
-            {activeTicker}
-          </span>
-        </p>
-
-        <div>
-          <label htmlFor="order-symbol" className={labelClass}>
-            Symbol
-          </label>
-          <select
-            id="order-symbol"
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            className={inputClass}
-          >
-            {watchlist.map((w) => (
-              <option key={w.symbol} value={w.symbol}>
-                {w.symbol}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <span className={labelClass}>Side</span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setSide("long")}
-              className={`rounded-[6px] py-3 text-sm font-semibold transition-colors ${
-                side === "long"
-                  ? "bg-[var(--long)] text-white shadow-sm"
-                  : "border border-[var(--border)] bg-[var(--page-bg)] text-[var(--foreground-muted)] hover:bg-[var(--hover-row)]"
-              }`}
-            >
-              Long
-            </button>
-            <button
-              type="button"
-              onClick={() => setSide("short")}
-              className={`rounded-[6px] py-3 text-sm font-semibold transition-colors ${
-                side === "short"
-                  ? "bg-[var(--short)] text-white shadow-sm"
-                  : "border border-[var(--border)] bg-[var(--page-bg)] text-[var(--foreground-muted)] hover:bg-[var(--hover-row)]"
-              }`}
-            >
-              Short
-            </button>
+        ) : (
+          <div className="shrink-0 border-b border-border px-3 py-3">
+            <p className="text-center text-xs text-muted-foreground">
+              No positions yet — P&amp;L will appear when your account has
+              activity.
+            </p>
           </div>
-        </div>
+        )}
 
-        <div>
-          <label htmlFor="order-type" className={labelClass}>
-            Order type
-          </label>
-          <select
-            id="order-type"
-            value={orderType}
-            onChange={(e) => setOrderType(e.target.value)}
-            className={inputClass}
-          >
-            <option value="MKT">MKT</option>
-            <option value="LMT">LMT</option>
-            <option value="STP">STP</option>
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="order-qty" className={labelClass}>
-            Quantity
-          </label>
-          <input
-            id="order-qty"
-            type="text"
-            inputMode="decimal"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            className={inputClass}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="order-tif" className={labelClass}>
-            TIF
-          </label>
-          <select
-            id="order-tif"
-            value={tif}
-            onChange={(e) => setTif(e.target.value)}
-            className={inputClass}
-          >
-            <option value="DAY">DAY</option>
-            <option value="GTC">GTC</option>
-            <option value="IOC">IOC</option>
-          </select>
-        </div>
-
-        {showPrice ? (
-          <div>
-            <label htmlFor="order-price" className={labelClass}>
-              Price
-            </label>
-            <input
-              id="order-price"
-              type="text"
-              inputMode="decimal"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="Limit / stop"
-              className={inputClass}
-            />
-          </div>
-        ) : null}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className={`h-12 w-full rounded-[6px] text-sm font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50 ${
-            side === "long" ? "bg-[var(--long)]" : "bg-[var(--short)]"
-          }`}
+        <form
+          onSubmit={handleSubmit}
+          className="flex min-h-0 flex-1 flex-col"
         >
-          {submitting ? "Submitting…" : "Submit order"}
-        </button>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 pb-2">
+            <div className="space-y-2">
+              <label
+                htmlFor="order-symbol"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                Symbol
+              </label>
+              <Select
+                value={symbol}
+                onValueChange={(v) => {
+                  if (v != null) setSymbol(v);
+                }}
+              >
+                <SelectTrigger id="order-symbol" className="w-full shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="shadow-none ring-1 ring-border">
+                  {watchlist.map((w) => (
+                    <SelectItem key={w.symbol} value={w.symbol}>
+                      {w.symbol}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        {feedback ? (
-          <p
-            role="status"
-            className={`rounded-[6px] px-3 py-2 text-xs leading-snug ${
-              feedback.kind === "success"
-                ? "bg-[var(--long-bg)] text-[var(--long)]"
-                : feedback.kind === "error"
-                  ? "bg-[var(--short-bg)] text-[var(--short)]"
-                  : "bg-[var(--pending-bg)] text-[var(--pending)]"
-            }`}
-          >
-            {feedback.text}
-          </p>
-        ) : null}
-      </form>
-    </aside>
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-muted-foreground">
+                Side
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={side === "long" ? "default" : "outline"}
+                  className={cn(
+                    "h-11 shadow-none",
+                    side === "long" &&
+                      "border-green-600 bg-green-600 text-white hover:bg-green-600/90",
+                  )}
+                  onClick={() => setSide("long")}
+                >
+                  Long
+                </Button>
+                <Button
+                  type="button"
+                  variant={side === "short" ? "default" : "outline"}
+                  className={cn(
+                    "h-11 shadow-none",
+                    side === "short" &&
+                      "border-red-500 bg-red-500 text-white hover:bg-red-500/90",
+                  )}
+                  onClick={() => setSide("short")}
+                >
+                  Short
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="order-type"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                Order type
+              </label>
+              <Select
+                value={orderType}
+                onValueChange={(v) => {
+                  if (v != null) setOrderType(v);
+                }}
+              >
+                <SelectTrigger id="order-type" className="w-full shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="shadow-none ring-1 ring-border">
+                  <SelectItem value="MKT">MKT</SelectItem>
+                  <SelectItem value="LMT">LMT</SelectItem>
+                  <SelectItem value="STP">STP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="order-qty"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                Quantity
+              </label>
+              <Input
+                id="order-qty"
+                type="text"
+                inputMode="decimal"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="font-mono shadow-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="order-tif"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                TIF
+              </label>
+              <Select
+                value={tif}
+                onValueChange={(v) => {
+                  if (v != null) setTif(v);
+                }}
+              >
+                <SelectTrigger id="order-tif" className="w-full shadow-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="shadow-none ring-1 ring-border">
+                  <SelectItem value="DAY">DAY</SelectItem>
+                  <SelectItem value="GTC">GTC</SelectItem>
+                  <SelectItem value="IOC">IOC</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {showPrice ? (
+              <div className="space-y-2">
+                <label
+                  htmlFor="order-price"
+                  className="text-sm font-medium text-muted-foreground"
+                >
+                  Price
+                </label>
+                <Input
+                  id="order-price"
+                  type="text"
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="Limit / stop"
+                  className="font-mono shadow-none"
+                />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-border bg-card px-4 py-4">
+            <Button
+              type="submit"
+              disabled={submitting}
+              className={cn(
+                "h-11 w-full shadow-none",
+                side === "long"
+                  ? "bg-green-600 text-white hover:bg-green-600/90"
+                  : "bg-red-500 text-white hover:bg-red-500/90",
+              )}
+            >
+              {submitting ? "Submitting…" : "Submit order"}
+            </Button>
+
+            {feedback ? (
+              <p
+                role="status"
+                className={cn(
+                  "w-full rounded-md px-3 py-2 text-xs leading-snug",
+                  feedback.kind === "success" &&
+                    "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400",
+                  feedback.kind === "error" &&
+                    "bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400",
+                  feedback.kind === "info" &&
+                    "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400",
+                )}
+              >
+                {feedback.text}
+              </p>
+            ) : null}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -4,9 +4,9 @@ import {
   CandlestickSeries,
   ColorType,
   createChart,
-  LineSeries,
   type Time,
 } from "lightweight-charts";
+import { Briefcase } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 
@@ -19,6 +19,29 @@ import { OpenOrdersSection } from "@/components/trading/OpenOrdersSection";
 import { useMeridianTheme } from "@/components/ThemeProvider";
 import { Topbar } from "@/components/trading/Topbar";
 import { Watchlist } from "@/components/trading/Watchlist";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import type { PositionRow } from "@/hooks/useIBKR";
 import {
   normalizeLiveOrders,
@@ -33,8 +56,12 @@ import {
   type ChartTimeframe,
 } from "@/lib/chart-history";
 import { formatMoneyStable } from "@/lib/format-display";
-import { conidForSymbol, WATCHLIST_ENTRIES } from "@/lib/watchlist-constants";
-import { useTradingStore, type ChartType } from "@/store/trading";
+import { parsePricesResponse } from "@/lib/prices-response";
+import { conidForSymbol } from "@/lib/watchlist-constants";
+import {
+  loadWatchlistFromStorage,
+  useTradingStore,
+} from "@/store/trading";
 
 async function jsonFetcher<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -44,6 +71,15 @@ async function jsonFetcher<T>(url: string): Promise<T> {
   }
   if (!text) return [] as T;
   return JSON.parse(text) as T;
+}
+
+async function positionPricesFetcher(url: string) {
+  const res = await fetch(url);
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(text.trim() || `Request failed (${res.status})`);
+  }
+  return parsePricesResponse(JSON.parse(text) as unknown);
 }
 
 async function historyFetcher(url: string): Promise<ChartOHLCBar[]> {
@@ -97,104 +133,151 @@ function PositionsSection({
 }) {
   const unreal = pnl.unrealizedPnL;
   const unrealPos = unreal >= 0;
+
+  const symbolsParam = useMemo(
+    () =>
+      [...new Set(positions.map((p) => p.symbol).filter(Boolean))].join(","),
+    [positions],
+  );
+
+  const pricesUrl =
+    symbolsParam.length > 0
+      ? `/api/prices?symbols=${encodeURIComponent(symbolsParam)}`
+      : null;
+
+  const { data: priceData } = useSWR(pricesUrl, positionPricesFetcher, {
+    refreshInterval: 30_000,
+    revalidateOnFocus: false,
+  });
+
   return (
-    <section className="flex shrink-0 flex-col border-t border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
-          Positions
-        </h2>
-        <div className="flex items-center gap-2 font-mono text-xs tabular-nums">
-          <span className="text-[var(--foreground-muted)]">Unrealized</span>
+    <Card className="shrink-0 py-0 shadow-none">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border py-3">
+        <CardTitle className="text-sm font-medium">Positions</CardTitle>
+        <div className="flex items-center gap-2 font-mono text-xs tabular-nums text-muted-foreground">
+          <span>Unrealized</span>
           <span
-            className={
-              unrealPos ? "font-semibold text-[var(--long)]" : "font-semibold text-[var(--short)]"
-            }
+            className={cn(
+              "font-semibold",
+              unrealPos ? "text-green-600" : "text-red-500",
+            )}
           >
             {unrealPos ? "+" : ""}
             {formatMoneyStable(unreal)}
           </span>
         </div>
-      </div>
-      <div className="overflow-x-auto">
+      </CardHeader>
+      <CardContent className="p-0">
         {error ? (
-          <p className="p-4 text-sm text-[var(--short)]">{error.message}</p>
+          <p className="p-4 text-sm text-red-500">{error.message}</p>
         ) : isLoading ? (
-          <p className="p-4 text-sm text-[var(--foreground-muted)]">
+          <p className="p-4 text-sm text-muted-foreground">
             Loading positions…
           </p>
         ) : positions.length === 0 ? (
-          <p className="p-4 text-sm text-[var(--foreground-muted)]">
-            No open positions.
-          </p>
+          <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+            <Briefcase
+              className="size-9 text-muted-foreground/50"
+              strokeWidth={1.25}
+              aria-hidden
+            />
+            <p className="text-sm font-medium text-foreground">
+              No open positions
+            </p>
+            <p className="max-w-[240px] text-xs text-muted-foreground">
+              When you hold a position, it will show here with live marks.
+            </p>
+          </div>
         ) : (
-          <table className="w-full border-collapse text-left text-xs">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-[10px] font-medium uppercase tracking-wider text-[var(--foreground-muted)]">
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 font-medium">
-                  Symbol
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 font-medium">
-                  Side
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 text-right font-medium">
-                  Qty
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 text-right font-medium">
-                  Avg
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 text-right font-medium">
-                  UPNL
-                </th>
-              </tr>
-            </thead>
-            <tbody className="font-mono tabular-nums text-[var(--foreground)]">
-              {positions.map((p, i) => (
-                <tr
-                  key={`${p.symbol}-${p.side}`}
-                  className={`border-b border-[var(--border)] hover:bg-[var(--hover-row)] ${i % 2 === 1 ? "bg-[var(--row-alt)]" : ""}`}
-                >
-                  <td className="px-3 py-2.5 font-semibold text-[var(--foreground)]">
-                    {p.symbol}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span
-                      className={`inline-block rounded-[6px] px-2 py-0.5 text-[10px] font-semibold ${
-                        p.side === "long"
-                          ? "bg-[var(--long-bg)] text-[var(--long)]"
-                          : "bg-[var(--short-bg)] text-[var(--short)]"
-                      }`}
-                    >
-                      {p.side === "long" ? "Long" : "Short"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right">{p.quantity}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    {formatMoneyStable(p.avgCost)}
-                  </td>
-                  <td
-                    className={`px-3 py-2.5 text-right font-medium ${
-                      p.unrealizedPnL >= 0
-                        ? "text-[var(--long)]"
-                        : "text-[var(--short)]"
-                    }`}
-                  >
-                    {p.unrealizedPnL >= 0 ? "+" : ""}
-                    {formatMoneyStable(p.unrealizedPnL)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="w-full overflow-x-auto">
+            <Table className="w-full min-w-[640px] table-fixed">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[14%] whitespace-nowrap">
+                    Symbol
+                  </TableHead>
+                  <TableHead className="w-[12%] whitespace-nowrap">
+                    Side
+                  </TableHead>
+                  <TableHead className="w-[10%] whitespace-nowrap text-right">
+                    Qty
+                  </TableHead>
+                  <TableHead className="w-[14%] whitespace-nowrap text-right">
+                    Avg
+                  </TableHead>
+                  <TableHead className="w-[14%] whitespace-nowrap text-right">
+                    Last
+                  </TableHead>
+                  <TableHead className="min-w-[5.5rem] whitespace-nowrap text-right">
+                    UPNL
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {positions.map((p) => {
+                  const lastPx = priceData?.prices[p.symbol];
+                  const hasLast =
+                    typeof lastPx === "number" &&
+                    Number.isFinite(lastPx) &&
+                    lastPx !== 0;
+                  return (
+                    <TableRow key={`${p.symbol}-${p.side}`}>
+                      <TableCell className="truncate font-medium">
+                        {p.symbol}
+                      </TableCell>
+                      <TableCell>
+                        {p.side === "long" ? (
+                          <Badge
+                            variant="outline"
+                            className="border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700"
+                          >
+                            Long
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600"
+                          >
+                            Short
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs tabular-nums">
+                        {p.quantity}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs tabular-nums">
+                        {formatMoneyStable(p.avgCost)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs tabular-nums">
+                        {hasLast
+                          ? lastPx.toLocaleString("en-US", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : "—"}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right font-mono text-xs font-medium tabular-nums",
+                          p.unrealizedPnL >= 0
+                            ? "text-green-600"
+                            : "text-red-500",
+                        )}
+                      >
+                        {p.unrealizedPnL >= 0 ? "+" : ""}
+                        {formatMoneyStable(p.unrealizedPnL)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
-
-const chartModes: { id: ChartType; label: string }[] = [
-  { id: "candlestick", label: "Candles" },
-  { id: "line", label: "Line" },
-];
 
 function readCssColor(varName: string, fallback: string): string {
   if (typeof document === "undefined") return fallback;
@@ -208,8 +291,6 @@ function PriceChartPane() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const activeTicker = useTradingStore((s) => s.activeTicker);
-  const chartType = useTradingStore((s) => s.chartType);
-  const setChartType = useTradingStore((s) => s.setChartType);
   const { theme } = useMeridianTheme();
 
   const [timeframe, setTimeframe] = useState<ChartTimeframe>("1D");
@@ -265,7 +346,6 @@ function PriceChartPane() {
     const text = readCssColor("--chart-text", "#525252");
     const long = readCssColor("--long", "#22c55e");
     const short = readCssColor("--short", "#ef4444");
-    const lineColor = readCssColor("--foreground-muted", "#737373");
 
     el.replaceChildren();
     const chart = createChart(el, {
@@ -275,8 +355,8 @@ function PriceChartPane() {
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: grid },
-        horzLines: { color: grid },
+        vertLines: { visible: false, color: grid },
+        horzLines: { visible: false, color: grid },
       },
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false },
@@ -287,36 +367,26 @@ function PriceChartPane() {
       autoSize: true,
     });
 
-    if (chartType === "candlestick") {
-      const s = chart.addSeries(CandlestickSeries, {
-        upColor: long,
-        downColor: short,
-        borderUpColor: long,
-        borderDownColor: short,
-        wickUpColor: long,
-        wickDownColor: short,
-      });
-      s.setData(
-        bars.map((b) => ({
-          time: b.time as Time,
-          open: b.open,
-          high: b.high,
-          low: b.low,
-          close: b.close,
-        })),
-      );
-    } else {
-      const s = chart.addSeries(LineSeries, {
-        color: lineColor,
-        lineWidth: 2,
-      });
-      s.setData(
-        bars.map((b) => ({
-          time: b.time as Time,
-          value: b.close,
-        })),
-      );
-    }
+    const s = chart.addSeries(CandlestickSeries, {
+      upColor: long,
+      downColor: short,
+      borderUpColor: long,
+      borderDownColor: short,
+      wickUpColor: long,
+      wickDownColor: short,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      baseLineVisible: false,
+    });
+    s.setData(
+      bars.map((b) => ({
+        time: b.time as Time,
+        open: b.open,
+        high: b.high,
+        low: b.low,
+        close: b.close,
+      })),
+    );
 
     chart.timeScale().fitContent();
 
@@ -329,7 +399,7 @@ function PriceChartPane() {
       ro.disconnect();
       chart.remove();
     };
-  }, [bars, chartType, theme]);
+  }, [bars, theme]);
 
   const showLoader =
     mounted &&
@@ -343,16 +413,17 @@ function PriceChartPane() {
   const chPos = hasCh && ch >= 0;
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col bg-[var(--chart-bg)]">
-      <div className="flex shrink-0 flex-col gap-3 px-3 py-3">
+    <Card className="flex h-full min-h-0 flex-1 flex-col bg-[var(--chart-bg)] py-0 shadow-none">
+      <CardHeader className="shrink-0 space-y-4 border-b border-border">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
+            <CardTitle className="text-2xl font-semibold tracking-tight">
               {activeTicker}
-            </h2>
-            <div className="mt-1 flex flex-wrap items-baseline gap-2">
-              <span className="font-mono text-[28px] font-semibold leading-none tabular-nums tracking-tight text-[var(--foreground)]">
-                {sessionStats?.close != null && Number.isFinite(sessionStats.close)
+            </CardTitle>
+            <div className="mt-2 flex flex-wrap items-baseline gap-2">
+              <span className="font-mono text-2xl font-semibold leading-none tabular-nums sm:text-[28px]">
+                {sessionStats?.close != null &&
+                Number.isFinite(sessionStats.close)
                   ? sessionStats.close.toLocaleString("en-US", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
@@ -362,9 +433,10 @@ function PriceChartPane() {
               {hasCh ? (
                 <>
                   <span
-                    className={`font-mono text-sm font-semibold tabular-nums ${
-                      chPos ? "text-[var(--long)]" : "text-[var(--short)]"
-                    }`}
+                    className={cn(
+                      "font-mono text-sm font-semibold tabular-nums",
+                      chPos ? "text-green-600" : "text-red-500",
+                    )}
                   >
                     {chPos ? "+" : ""}
                     {ch.toLocaleString("en-US", {
@@ -372,89 +444,75 @@ function PriceChartPane() {
                       maximumFractionDigits: 2,
                     })}
                   </span>
-                  <span
-                    className={`rounded-md px-2 py-0.5 font-mono text-xs font-semibold tabular-nums ${
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "border-0 font-mono text-xs font-medium tabular-nums",
                       chPos
-                        ? "bg-[var(--long-bg)] text-[var(--long)]"
-                        : "bg-[var(--short-bg)] text-[var(--short)]"
-                    }`}
+                        ? "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400"
+                        : "bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400",
+                    )}
                   >
                     {chPos ? "+" : ""}
                     {pct.toFixed(2)}%
-                  </span>
+                  </Badge>
                 </>
               ) : null}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div
-              className="flex rounded-[6px] border border-[var(--border)] bg-[var(--surface)] p-0.5"
-              role="group"
-              aria-label="Chart style"
+          <div className="flex flex-wrap items-center gap-3">
+            <Tabs
+              value={timeframe}
+              onValueChange={(v) => {
+                if (v != null) setTimeframe(v as ChartTimeframe);
+              }}
+              className="w-auto"
             >
-              {chartModes.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setChartType(m.id)}
-                  className={`rounded-[5px] px-2.5 py-1 text-xs font-medium transition-colors ${
-                    chartType === m.id
-                      ? "bg-[var(--foreground)] text-[var(--surface)]"
-                      : "text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            <div
-              className="flex flex-wrap gap-1"
-              role="tablist"
-              aria-label="Chart range"
-            >
+              <TabsList variant="line" className="shadow-none">
+                {CHART_TIMEFRAMES.map((tf) => (
+                  <TabsTrigger
+                    key={tf}
+                    value={tf}
+                    className="font-mono text-xs shadow-none"
+                  >
+                    {tf}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
               {CHART_TIMEFRAMES.map((tf) => (
-                <button
+                <TabsContent
                   key={tf}
-                  type="button"
-                  role="tab"
-                  aria-selected={timeframe === tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={`rounded-full px-3 py-1 font-mono text-[11px] font-medium transition-colors ${
-                    timeframe === tf
-                      ? "bg-[var(--foreground)] text-[var(--page-bg)]"
-                      : "border border-[var(--border)] bg-[var(--surface)] text-[var(--foreground-muted)] hover:border-[var(--foreground-muted)]"
-                  }`}
+                  value={tf}
+                  className="sr-only"
+                  aria-hidden
                 >
-                  {tf}
-                </button>
+                  .
+                </TabsContent>
               ))}
-            </div>
+            </Tabs>
           </div>
         </div>
-      </div>
-      <div className="relative min-h-[200px] w-full min-w-0 flex-1">
+      </CardHeader>
+      <CardContent className="relative min-h-[200px] w-full min-w-0 flex-1 p-0">
         <div ref={containerRef} className="absolute inset-0 h-full w-full" />
         {showLoader ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--chart-bg)]/90">
-            <p className="text-sm font-medium text-[var(--foreground-muted)]">
+            <p className="text-sm font-medium text-muted-foreground">
               Loading chart…
             </p>
           </div>
         ) : null}
         {historyError && !bars?.length ? (
           <div className="absolute inset-0 flex items-center justify-center bg-[var(--chart-bg)]/95 px-4">
-            <p className="text-center text-sm text-[var(--short)]">
+            <p className="text-center text-sm text-red-500">
               {historyError.message}
             </p>
           </div>
         ) : null}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
-
-/** Single source for watchlist rows; SWR marketdata URL is derived from the same list. */
-const WATCHLIST = WATCHLIST_ENTRIES;
 
 const EMPTY_PNL: PnlSummary = {
   totalPnL: 0,
@@ -464,9 +522,17 @@ const EMPTY_PNL: PnlSummary = {
 
 export default function TradingDashboard() {
   const [mounted, setMounted] = useState(false);
+  const watchlistEntries = useTradingStore((s) => s.watchlistEntries);
+  const setWatchlistEntries = useTradingStore((s) => s.setWatchlistEntries);
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const stored = loadWatchlistFromStorage();
+    if (stored?.length) setWatchlistEntries(stored);
+  }, [setWatchlistEntries]);
 
   const {
     data: posRaw,
@@ -511,7 +577,10 @@ export default function TradingDashboard() {
       setOrderFeedback(null);
       setOrderSubmitting(true);
       try {
-        const conid = conidForSymbol(values.symbol, WATCHLIST);
+        const conid = conidForSymbol(
+          values.symbol,
+          useTradingStore.getState().watchlistEntries,
+        );
         if (conid == null) {
           setOrderFeedback({
             kind: "error",
@@ -585,42 +654,52 @@ export default function TradingDashboard() {
   );
 
   return (
-    <div className="grid min-h-screen grid-rows-[52px_1fr] bg-[var(--page-bg)]">
+    <div className="grid min-h-screen grid-rows-[auto_minmax(0,1fr)] bg-background">
       <Topbar />
-      <div className="grid min-h-0 grid-cols-[240px_1fr_300px] items-stretch border-t border-[var(--border)]">
-        <Watchlist entries={WATCHLIST} />
-        <main className="min-w-0 overflow-hidden bg-[var(--page-bg)]">
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="flex h-[42vh] min-h-[280px] max-h-[640px] shrink-0 flex-col">
-              <PriceChartPane />
-            </div>
-            <PositionsSection
-              positions={positions}
-              isLoading={
-                !mounted || (Boolean(posLoading) && !posError)
-              }
-              error={mounted ? posError : undefined}
-              pnl={pnl}
-            />
-            <OpenOrdersSection
-              orders={liveOrders}
-              isLoading={
-                !mounted ||
-                (Boolean(ordersLoading) && !ordersError)
-              }
-              error={mounted ? ordersError : undefined}
-              accountId={ibkrAccountId}
-              onRefresh={mutateOrders}
-            />
+      <div className="flex min-h-0 w-full min-w-0 flex-1 gap-4 overflow-x-auto p-4">
+        <div className="flex w-[240px] shrink-0 flex-col">
+          <Card className="flex min-h-0 flex-1 flex-col py-0 shadow-none">
+            <CardHeader className="border-b border-border py-3">
+              <CardTitle className="text-sm font-medium">Watchlist</CardTitle>
+            </CardHeader>
+            <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
+              <Watchlist embedded />
+            </CardContent>
+          </Card>
+        </div>
+
+        <main className="flex min-h-0 min-w-[min(100%,360px)] flex-1 flex-col gap-4">
+          <div className="flex h-[42vh] min-h-[280px] max-h-[640px] shrink-0 flex-col">
+            <PriceChartPane />
           </div>
+          <Separator className="shrink-0" />
+          <PositionsSection
+            positions={positions}
+            isLoading={!mounted || (Boolean(posLoading) && !posError)}
+            error={mounted ? posError : undefined}
+            pnl={pnl}
+          />
+          <Separator className="shrink-0" />
+          <OpenOrdersSection
+            orders={liveOrders}
+            isLoading={
+              !mounted || (Boolean(ordersLoading) && !ordersError)
+            }
+            error={mounted ? ordersError : undefined}
+            accountId={ibkrAccountId}
+            onRefresh={mutateOrders}
+          />
         </main>
-        <OrderPanel
-          watchlist={WATCHLIST}
-          pnl={pnl}
-          onSubmit={handleOrderSubmit}
-          feedback={orderFeedback}
-          submitting={orderSubmitting}
-        />
+
+        <div className="flex min-h-0 w-[300px] shrink-0 flex-col">
+          <OrderPanel
+            watchlist={watchlistEntries}
+            pnl={pnl}
+            onSubmit={handleOrderSubmit}
+            feedback={orderFeedback}
+            submitting={orderSubmitting}
+          />
+        </div>
       </div>
     </div>
   );

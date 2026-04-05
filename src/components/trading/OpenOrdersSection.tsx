@@ -1,7 +1,25 @@
 "use client";
 
+import { ClipboardList } from "lucide-react";
 import { useCallback, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import type { LiveOrderRow } from "@/lib/ibkr-normalize";
 import {
   cancelAllCancellableOrders,
@@ -57,117 +75,110 @@ export function OpenOrdersSection({
   ).length;
 
   return (
-    <section className="flex shrink-0 flex-col border-t border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2.5">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">
-          Open orders
-        </h2>
-        <button
+    <Card className="flex min-h-0 flex-1 flex-col py-0 shadow-none">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-border py-3">
+        <CardTitle className="text-sm font-medium">Open orders</CardTitle>
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 text-red-500 shadow-none hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
           onClick={() => void handleCancelAll()}
           disabled={
             cancellingAll || cancellableCount === 0 || Boolean(error)
           }
-          className="text-xs font-semibold text-[var(--short)] transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-35"
         >
           {cancellingAll ? "Cancelling…" : "Cancel all orders"}
-        </button>
-      </div>
-      <div className="overflow-x-auto">
+        </Button>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
         {error ? (
-          <p className="p-4 text-sm text-[var(--short)]">{error.message}</p>
+          <p className="p-4 text-sm text-red-500">{error.message}</p>
         ) : isLoading ? (
-          <p className="p-4 text-sm text-[var(--foreground-muted)]">
-            Loading orders…
-          </p>
+          <p className="p-4 text-sm text-muted-foreground">Loading orders…</p>
         ) : orders.length === 0 ? (
-          <p className="p-4 text-sm text-[var(--foreground-muted)]">
-            No open orders.
-          </p>
+          <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+            <ClipboardList
+              className="size-9 text-muted-foreground/45"
+              strokeWidth={1.25}
+              aria-hidden
+            />
+            <p className="text-sm font-medium text-foreground">No open orders</p>
+            <p className="max-w-[260px] text-xs text-muted-foreground">
+              Working orders will appear here. Submit from the order panel or your
+              broker.
+            </p>
+          </div>
         ) : (
-          <table className="w-full border-collapse text-left text-xs">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-[10px] font-medium uppercase tracking-wider text-[var(--foreground-muted)]">
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 font-medium">
-                  Order ID
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 font-medium">
-                  Symbol
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 font-medium">
-                  Side
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 font-medium">
-                  Type
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 text-right font-medium">
-                  Qty
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 font-medium">
-                  Status
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 font-medium">
-                  Time
-                </th>
-                <th className="sticky top-0 bg-[var(--surface)] px-3 py-2 text-right font-medium">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="font-mono tabular-nums text-[var(--foreground)]">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Order ID</TableHead>
+                <TableHead>Symbol</TableHead>
+                <TableHead>Side</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Time</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {orders.map((row, idx) => {
                 const canCancel = isOrderCancellableStatus(row.status);
                 return (
-                  <tr
-                    key={`${row.orderId}-${idx}`}
-                    className="border-b border-[var(--border)] odd:bg-[var(--row-alt)] hover:bg-[var(--hover-row)]"
-                  >
-                    <td className="px-3 py-2 font-medium">{row.orderId}</td>
-                    <td className="px-3 py-2">{row.symbol}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={
-                          row.side === "BUY"
-                            ? "text-[var(--long)]"
-                            : row.side === "SELL"
-                              ? "text-[var(--short)]"
-                              : ""
-                        }
-                      >
-                        {row.side}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">{row.orderType}</td>
-                    <td className="px-3 py-2 text-right">{row.quantity}</td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`inline-block rounded-[6px] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${openOrderStatusClass(row.status)}`}
+                  <TableRow key={`${row.orderId}-${idx}`}>
+                    <TableCell className="font-medium">{row.orderId}</TableCell>
+                    <TableCell>{row.symbol}</TableCell>
+                    <TableCell
+                      className={cn(
+                        "font-mono text-xs",
+                        row.side === "BUY" && "text-green-600",
+                        row.side === "SELL" && "text-red-500",
+                      )}
+                    >
+                      {row.side}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {row.orderType}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs tabular-nums">
+                      {row.quantity}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={cn(
+                          "font-mono text-[10px] font-normal",
+                          openOrderStatusClass(row.status),
+                        )}
                       >
                         {row.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-[11px] text-[var(--foreground-muted)]">
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
                       {row.orderTime}
-                    </td>
-                    <td className="px-3 py-2 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       {canCancel ? (
-                        <button
+                        <Button
                           type="button"
+                          variant="outline"
+                          size="sm"
                           disabled={cancellingId === row.orderId}
+                          className="h-7 border-red-200 text-xs text-red-500 shadow-none hover:bg-red-50 dark:border-red-900"
                           onClick={() => void handleCancelOne(row.orderId)}
-                          className="rounded-[6px] border border-[var(--short)] bg-transparent px-2 py-1 text-[10px] font-semibold text-[var(--short)] transition-colors hover:bg-[var(--short-bg)] disabled:opacity-50"
                         >
                           {cancellingId === row.orderId ? "…" : "Cancel"}
-                        </button>
+                        </Button>
                       ) : null}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
