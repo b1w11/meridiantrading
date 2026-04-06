@@ -32,7 +32,7 @@ type OpenOrdersSectionProps = {
   orders: LiveOrderRow[];
   isLoading: boolean;
   error: Error | undefined;
-  /** Passed as `accountId` on DELETE when set (e.g. NEXT_PUBLIC_IBKR_ACCOUNT_ID). */
+  /** Passed as `accountId` on DELETE when set (from `/api/ibkr/me` via trading store). */
   accountId: string | undefined;
   onRefresh: () => Promise<unknown>;
 };

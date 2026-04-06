@@ -50,7 +50,7 @@ function LoginForm() {
 
   return (
     <div className="flex min-h-full flex-1 flex-col items-center justify-center bg-background px-4 py-16">
-      <Card className="w-full max-w-sm border-border shadow-none">
+      <Card className="w-[300px] max-w-full min-w-0 border-border shadow-none">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-md border border-border bg-muted/30 text-sm font-semibold">
             M
@@ -58,9 +58,9 @@ function LoginForm() {
           <CardTitle className="text-xl font-semibold">Meridian</CardTitle>
           <CardDescription>Sign in to continue</CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
+        <CardContent className="min-w-0">
+          <form onSubmit={handleSubmit} className="min-w-0 space-y-4">
+            <div className="min-w-0 space-y-2">
               <label
                 htmlFor="email"
                 className="text-sm font-medium text-muted-foreground"
@@ -76,10 +76,10 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className="shadow-none"
+                className="box-border h-8 max-w-full text-sm shadow-none ring-inset focus-visible:ring-2"
               />
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <label
                 htmlFor="password"
                 className="text-sm font-medium text-muted-foreground"
@@ -94,7 +94,7 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="shadow-none"
+                className="box-border h-8 max-w-full text-sm shadow-none ring-inset focus-visible:ring-2"
               />
             </div>
             {error ? (
@@ -108,7 +108,7 @@ function LoginForm() {
             <Button
               type="submit"
               disabled={pending}
-              className="h-11 w-full shadow-none"
+              className="box-border h-9 w-full max-w-full text-sm shadow-none"
             >
               {pending ? "Signing in…" : "Sign in"}
             </Button>

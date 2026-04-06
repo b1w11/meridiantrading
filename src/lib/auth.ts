@@ -9,14 +9,14 @@ const users = [
     id: "1",
     email: "admin@meridian.com",
     passwordHash:
-      "$2b$10$sxF1l9Mi3FJb7z/yTt.TE.1w8bj0LFQ6l0ZWaNcbbuz69EtgFnCGm",
+      "$2b$10$LrGGVe2pxocoyR7su9kSBe9lMRu9K.phLX44ewvAjEOr/5qNdEeFm",
     role: "admin" as const,
   },
   {
     id: "2",
     email: "client@meridian.com",
     passwordHash:
-      "$2b$10$LUlRJQ.uIhwozDGuyc0vr.yL6Qayl2XedJmNUmXvpHeDVWwtW4Jx6",
+      "$2b$10$ioBmSZ8rcu5/8FA9gp8Qy.RQc/1HEJxfWvpfz4jNtXIygXbtXBn.6",
     role: "viewer" as const,
   },
 ];
@@ -28,8 +28,8 @@ const users = [
  */
 export async function generateHashedPasswords(): Promise<void> {
   const [adminHash, clientHash] = await Promise.all([
-    bcrypt.hash("Meridian2024!", 10),
-    bcrypt.hash("Client2024!", 10),
+    bcrypt.hash("Meridian2026!", 10),
+    bcrypt.hash("Client2026!", 10),
   ]);
   console.log("[meridian-auth] admin@meridian.com:", adminHash);
   console.log("[meridian-auth] client@meridian.com:", clientHash);

@@ -16,9 +16,8 @@ export function getIbkrGatewayBase(): string {
 }
 
 export function getIbkrAccountId(): string | undefined {
-  const server = process.env.IBKR_ACCOUNT_ID?.trim();
-  const publicId = process.env.NEXT_PUBLIC_IBKR_ACCOUNT_ID?.trim();
-  return server || publicId || undefined;
+  const id = process.env.IBKR_ACCOUNT_ID?.trim();
+  return id || undefined;
 }
 
 export function requireIbkrAccountId(): string | null {

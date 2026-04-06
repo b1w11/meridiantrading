@@ -16,7 +16,6 @@ import {
   OrderPanel,
 } from "@/components/trading/OrderPanel";
 import { OpenOrdersSection } from "@/components/trading/OpenOrdersSection";
-import { useMeridianTheme } from "@/components/ThemeProvider";
 import { Topbar } from "@/components/trading/Topbar";
 import { Watchlist } from "@/components/trading/Watchlist";
 import { Badge } from "@/components/ui/badge";
@@ -291,7 +290,6 @@ function PriceChartPane() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const activeTicker = useTradingStore((s) => s.activeTicker);
-  const { theme } = useMeridianTheme();
 
   const [timeframe, setTimeframe] = useState<ChartTimeframe>("1D");
   const [mounted, setMounted] = useState(false);
@@ -399,7 +397,7 @@ function PriceChartPane() {
       ro.disconnect();
       chart.remove();
     };
-  }, [bars, theme]);
+  }, [bars]);
 
   const showLoader =
     mounted &&
@@ -449,8 +447,8 @@ function PriceChartPane() {
                     className={cn(
                       "border-0 font-mono text-xs font-medium tabular-nums",
                       chPos
-                        ? "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400"
-                        : "bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400",
+                        ? "bg-green-50 text-green-600"
+                        : "bg-red-50 text-red-500",
                     )}
                   >
                     {chPos ? "+" : ""}
@@ -524,6 +522,7 @@ export default function TradingDashboard() {
   const [mounted, setMounted] = useState(false);
   const watchlistEntries = useTradingStore((s) => s.watchlistEntries);
   const setWatchlistEntries = useTradingStore((s) => s.setWatchlistEntries);
+  const ibkrAccountId = useTradingStore((s) => s.ibkrAccountId);
 
   useEffect(() => {
     setMounted(true);
@@ -561,11 +560,6 @@ export default function TradingDashboard() {
   const positions = normalizePositions(posRaw ?? []);
   const pnl = normalizePnl(pnlRaw ?? null);
   const liveOrders = normalizeLiveOrders(ordersRaw ?? []);
-
-  const ibkrAccountId =
-    typeof process.env.NEXT_PUBLIC_IBKR_ACCOUNT_ID === "string"
-      ? process.env.NEXT_PUBLIC_IBKR_ACCOUNT_ID.trim() || undefined
-      : undefined;
 
   const [orderFeedback, setOrderFeedback] = useState<OrderFeedback | null>(
     null,

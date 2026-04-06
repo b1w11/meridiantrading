@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Geist } from "next/font/google";
 
 import { AuthSessionProvider } from "@/components/AuthSessionProvider";
+import { IbkrAccountBootstrap } from "@/components/IbkrAccountBootstrap";
 import { PersistRehydration } from "@/components/PersistRehydration";
 import { RuleEngineRunner } from "@/components/RuleEngineRunner";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -27,8 +28,6 @@ export const metadata: Metadata = {
   description: "Meridian trading workspace",
 };
 
-const themeInitScript = `(function(){try{var k="meridian-theme";var t=localStorage.getItem(k);var d=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme:dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}})();`;
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -40,12 +39,10 @@ export default function RootLayout({
       className={cn("min-h-full", "antialiased", inter.variable, jetbrainsMono.variable, "font-sans", geist.variable)}
       suppressHydrationWarning
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <AuthSessionProvider>
           <ThemeProvider>
+            <IbkrAccountBootstrap />
             <PersistRehydration />
             <RuleEngineRunner />
             {children}

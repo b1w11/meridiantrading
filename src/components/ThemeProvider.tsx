@@ -4,79 +4,48 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useState,
 } from "react";
 
-const STORAGE_KEY = "meridian-theme";
-
-export type MeridianTheme = "light" | "dark";
+/** Dark mode is disabled for now; only `"light"` is supported. */
+export type MeridianTheme = "light";
 
 type ThemeContextValue = {
   theme: MeridianTheme;
   setTheme: (t: MeridianTheme) => void;
   toggleTheme: () => void;
-  /** True after localStorage / DOM class have been applied on the client. */
+  /** True after the document has been forced to light on the client. */
   ready: boolean;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function applyDomTheme(theme: MeridianTheme) {
-  document.documentElement.classList.toggle("dark", theme === "dark");
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<MeridianTheme>("light");
   const [ready, setReady] = useState(false);
 
   useLayoutEffect(() => {
-    let initial: MeridianTheme = "light";
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY) as MeridianTheme | null;
-      if (stored === "dark" || stored === "light") {
-        initial = stored;
-      } else if (document.documentElement.classList.contains("dark")) {
-        initial = "dark";
-      } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        initial = "dark";
-      }
-    } catch {
-      /* ignore */
-    }
-    setThemeState(initial);
-    applyDomTheme(initial);
+    document.documentElement.classList.remove("dark");
     setReady(true);
   }, []);
 
-  useEffect(() => {
-    if (!ready) return;
-    applyDomTheme(theme);
-    try {
-      localStorage.setItem(STORAGE_KEY, theme);
-    } catch {
-      /* ignore */
-    }
-  }, [theme, ready]);
-
-  const setTheme = useCallback((t: MeridianTheme) => {
-    setThemeState(t);
+  const setTheme = useCallback((_t: MeridianTheme) => {
+    /* dark mode removed for now */
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
+    /* no-op */
   }, []);
 
   const value = useMemo(
     () => ({
-      theme,
+      theme: "light" as const,
       setTheme,
       toggleTheme,
       ready,
     }),
-    [theme, setTheme, toggleTheme, ready],
+    [setTheme, toggleTheme, ready],
   );
 
   return (

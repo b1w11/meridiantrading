@@ -1,19 +1,31 @@
 "use client";
 
+import {
+  AlertTriangle,
+  FileSliders,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Topbar } from "@/components/trading/Topbar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import {
   Tabs,
   TabsContent,
@@ -27,7 +39,13 @@ import { buildRulePriceData, ruleNeedsHistory } from "@/lib/rule-engine";
 import { cancelAllCancellableOrders } from "@/lib/open-orders";
 import { validateRulePayload } from "@/lib/rules-validate";
 import { useRulesStore } from "@/store/rules";
-import type { Rule, RuleConditionType } from "@/types/rules";
+import { useTradingStore } from "@/store/trading";
+import type {
+  EngineLogEntry,
+  OrderAttemptEntry,
+  Rule,
+  RuleConditionType,
+} from "@/types/rules";
 
 const CONDITION_OPTIONS: { value: RuleConditionType; label: string }[] = [
   { value: "PRICE_ABOVE", label: "Price above" },
@@ -73,6 +91,34 @@ function actionSummary(r: Rule): string {
   const side = a.side === "long" ? "Buy" : "Sell";
   const px = a.price != null ? ` @ ${a.price}` : "";
   return `${side} ${a.quantity} ${r.symbol} ${a.orderType}${px}`;
+}
+
+function ruleRowSubtitle(r: Rule): string {
+  return `${conditionSummary(r)} → ${actionSummary(r)}`;
+}
+
+function engineLogResultClass(e: EngineLogEntry): string {
+  if (e.conditionMet) return "text-green-600";
+  if (e.reason) return "text-red-500";
+  return "text-muted-foreground";
+}
+
+function engineLogResultText(e: EngineLogEntry): string {
+  if (e.conditionMet) {
+    const tail =
+      e.actionTaken !== "none"
+        ? ` · ${e.actionTaken.replace("_", " ")}`
+        : "";
+    return e.reason ? `Triggered${tail} · ${e.reason}` : `Triggered${tail}`;
+  }
+  if (e.reason) return `Not triggered · ${e.reason}`;
+  return "Not triggered";
+}
+
+function orderAttemptResultClass(o: OrderAttemptEntry): string {
+  if (o.outcome === "placed") return "text-green-600";
+  if (o.outcome === "failed") return "text-red-500";
+  return "text-muted-foreground";
 }
 
 async function fetchSpark(symbols: string[]): Promise<Record<string, number>> {
@@ -234,6 +280,7 @@ export default function RulesDashboard() {
   const setEngineStatus = useRulesStore((s) => s.setEngineStatus);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [creatingNew, setCreatingNew] = useState(false);
   const [editorTab, setEditorTab] = useState<"builder" | "code">("builder");
   const [form, setForm] = useState<BuilderForm>(emptyForm);
   const [builderError, setBuilderError] = useState<string | null>(null);
@@ -243,10 +290,7 @@ export default function RulesDashboard() {
   const [serverEvalBusy, setServerEvalBusy] = useState(false);
   const [cancelAllOrdersBusy, setCancelAllOrdersBusy] = useState(false);
 
-  const ibkrAccountId = useMemo(() => {
-    const v = process.env.NEXT_PUBLIC_IBKR_ACCOUNT_ID;
-    return typeof v === "string" && v.trim() ? v.trim() : undefined;
-  }, []);
+  const ibkrAccountId = useTradingStore((s) => s.ibkrAccountId);
 
   const selectedRule = useMemo(
     () => rules.find((r) => r.id === selectedId) ?? null,
@@ -280,6 +324,7 @@ export default function RulesDashboard() {
       addRule(rule);
       setSelectedId(rule.id);
     }
+    setCreatingNew(false);
   }, [addRule, form, selectedId, selectedRule?.createdAt, updateRule]);
 
   const handleSaveJson = useCallback(() => {
@@ -308,6 +353,7 @@ export default function RulesDashboard() {
       }
       setSelectedId(withId.id);
     }
+    setCreatingNew(false);
   }, [addRule, jsonText, rules, selectedId, updateRule]);
 
   const runServerEvaluate = useCallback(async () => {
@@ -390,307 +436,299 @@ export default function RulesDashboard() {
     form.conditionType !== "MA_CROSS_ABOVE" &&
     form.conditionType !== "MA_CROSS_BELOW";
 
+  const showEditor = selectedId !== null || creatingNew;
+  const showEmptyPanel = selectedId === null && !creatingNew;
+
   return (
-    <div className="flex min-h-screen min-h-0 flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex h-svh flex-col overflow-hidden bg-background text-foreground">
       <Topbar />
+
+      <header className="sticky top-0 z-20 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-6 py-2.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                engineStatus.running ? "bg-green-600" : "bg-red-500",
+              )}
+              aria-hidden
+            />
+            <span className="font-medium text-foreground">
+              {engineStatus.running ? "Running" : "Stopped"}
+            </span>
+          </span>
+          <span className="hidden sm:inline" aria-hidden>
+            ·
+          </span>
+          <span className="font-mono text-xs text-muted-foreground">
+            Last check:{" "}
+            {engineStatus.lastChecked
+              ? formatDateTimeStable(engineStatus.lastChecked)
+              : "—"}
+          </span>
+          <span className="hidden sm:inline" aria-hidden>
+            ·
+          </span>
+          <span>Active rules: {engineStatus.activeRules}</span>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shadow-none"
+            onClick={() => {
+              const s = useRulesStore.getState().engineStatus;
+              setEngineStatus({ ...s, running: !s.running });
+            }}
+          >
+            {engineStatus.running ? "Pause" : "Resume"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shadow-none"
+            onClick={() => void runServerEvaluate()}
+            disabled={serverEvalBusy}
+          >
+            {serverEvalBusy ? "Evaluating…" : "Server evaluate"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shadow-none"
+            onClick={() => void handleCancelAllIbkrOrders()}
+            disabled={cancelAllOrdersBusy}
+          >
+            {cancelAllOrdersBusy ? "Cancelling…" : "Cancel all orders"}
+          </Button>
+          {engineStatus.killSwitch ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shadow-none"
+              onClick={() => setKillSwitch(false)}
+            >
+              Disengage kill switch
+            </Button>
+          ) : null}
+          {!engineStatus.killSwitch ? (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="shadow-none"
+              onClick={() => setKillSwitch(true)}
+            >
+              Kill switch
+            </Button>
+          ) : null}
+        </div>
+      </header>
+
       {engineStatus.killSwitch ? (
         <div
-          className="shrink-0 animate-pulse bg-red-600 py-3 text-center text-sm font-semibold text-white"
+          className="flex shrink-0 items-center gap-2 border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700"
           role="alert"
         >
-          Kill switch active — all automated trading is halted
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
+          <span>
+            Kill switch actief — alle geautomatiseerde handel is gestopt
+          </span>
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 md:p-4">
-        <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight md:text-xl">
-              Rules engine
-            </h1>
-            <p className="mt-1 text-xs text-muted-foreground md:text-sm">
-              Last check:{" "}
-              {engineStatus.lastChecked
-                ? formatDateTimeStable(engineStatus.lastChecked)
-                : "—"}{" "}
-              · Active rules: {engineStatus.activeRules} · Engine{" "}
-              {engineStatus.running ? "running" : "paused"}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+      {serverEvalResult ? (
+        <div className="shrink-0 border-b border-border bg-muted/40 px-6 py-2 text-xs text-muted-foreground">
+          {serverEvalResult}
+        </div>
+      ) : null}
+
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[360px_1fr] gap-0 overflow-hidden">
+        <aside className="flex min-h-0 min-w-0 flex-col border-r border-border">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <h2 className="text-sm font-semibold tracking-tight">Rules</h2>
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="shadow-none"
               onClick={() => {
-                const s = useRulesStore.getState().engineStatus;
-                setEngineStatus({ ...s, running: !s.running });
+                setCreatingNew(true);
+                setSelectedId(null);
+                setForm(emptyForm);
+                setJsonText("");
+                setEditorTab("builder");
               }}
             >
-              {engineStatus.running ? "Pause engine" : "Resume engine"}
+              + New rule
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shadow-none"
-              onClick={() => void runServerEvaluate()}
-              disabled={serverEvalBusy}
-            >
-              {serverEvalBusy ? "Evaluating…" : "Server evaluate (no orders)"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-red-500 shadow-none hover:bg-red-50 dark:hover:bg-red-950/30"
-              onClick={() => void handleCancelAllIbkrOrders()}
-              disabled={cancelAllOrdersBusy}
-            >
-              {cancelAllOrdersBusy ? "Cancelling…" : "Cancel all IBKR orders"}
-            </Button>
-            {engineStatus.killSwitch ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shadow-none"
-                onClick={() => setKillSwitch(false)}
-              >
-                Disengage kill switch
-              </Button>
-            ) : null}
-            {!engineStatus.killSwitch ? (
-              <Button
-                type="button"
-                variant="destructive"
-                size="lg"
-                className="shadow-none bg-red-600 text-white hover:bg-red-600/90"
-                onClick={() => setKillSwitch(true)}
-              >
-                Kill switch
-              </Button>
-            ) : null}
           </div>
-        </div>
 
-        <Separator />
-
-        {serverEvalResult ? (
-          <Card className="shrink-0 border-border py-3 shadow-none">
-            <CardContent className="px-4 py-0 text-xs text-muted-foreground">
-              {serverEvalResult}
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[400px_1fr] gap-6 overflow-hidden">
-          <aside className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
-            <div className="flex shrink-0 items-center justify-between gap-1">
-              <h2 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">
-                Rules
-              </h2>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 text-green-600 shadow-none hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/30"
-                onClick={() => {
-                  setSelectedId(null);
-                  setForm(emptyForm);
-                  setJsonText("");
-                  setEditorTab("builder");
-                }}
-              >
-                + New rule
-              </Button>
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overflow-x-hidden pr-1">
-              {rules.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No rules yet.</p>
-              ) : (
-                rules.map((r) => (
-                  <Card
-                    key={r.id}
-                    role="button"
-                    tabIndex={0}
-                    size="sm"
-                    onClick={() => setSelectedId(r.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+            {rules.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-muted-foreground">
+                No rules yet.
+              </p>
+            ) : (
+              <ul className="flex flex-col">
+                {rules.map((r, idx) => (
+                  <li key={r.id}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setCreatingNew(false);
                         setSelectedId(r.id);
-                      }
-                    }}
-                    className={cn(
-                      "cursor-pointer py-2 shadow-none transition-colors",
-                      selectedId === r.id
-                        ? "ring-2 ring-foreground/20"
-                        : "hover:bg-muted/40",
-                    )}
-                  >
-                    <CardHeader className="gap-2 px-3 py-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <CardTitle className="truncate text-sm font-semibold">
-                            {r.name}
-                          </CardTitle>
-                          <p className="font-mono text-xs text-muted-foreground">
-                            {r.symbol}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-2">
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "cursor-pointer border-0 font-normal",
-                              r.enabled
-                                ? "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400"
-                                : "bg-muted text-muted-foreground",
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleRule(r.id);
-                            }}
-                          >
-                            {r.enabled ? "Enabled" : "Disabled"}
-                          </Badge>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            className="size-7 text-red-500 shadow-none hover:bg-red-50 dark:hover:bg-red-950/30"
-                            aria-label={`Delete ${r.name}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteRule(r.id);
-                              if (selectedId === r.id) setSelectedId(null);
-                            }}
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              aria-hidden
-                            >
-                              <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14M10 11v6M14 11v6" />
-                            </svg>
-                          </Button>
-                        </div>
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setCreatingNew(false);
+                          setSelectedId(r.id);
+                        }
+                      }}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-3 border-l-4 py-3 pr-3 pl-4 transition-colors",
+                        r.enabled
+                          ? "border-l-green-600"
+                          : "border-l-muted-foreground/30",
+                        selectedId === r.id ? "bg-muted" : "hover:bg-muted/50",
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">{r.name}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {ruleRowSubtitle(r)}
+                        </p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">
+                          Last:{" "}
+                          {r.lastTriggered
+                            ? formatDateTimeStable(r.lastTriggered)
+                            : "never"}
+                        </p>
                       </div>
-                    </CardHeader>
-                    <CardContent className="space-y-1 px-3 pt-2 pb-0 text-xs text-muted-foreground">
-                      <p>
-                        <span className="font-medium text-foreground">If</span>{" "}
-                        {conditionSummary(r)}
+                      <div className="flex shrink-0 items-center gap-2 pt-0.5">
+                        <span
+                          className="inline-flex shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <Switch
+                            checked={r.enabled}
+                            onCheckedChange={() => toggleRule(r.id)}
+                            aria-label={r.enabled ? "Disable rule" : "Enable rule"}
+                          />
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="size-8 shrink-0 text-muted-foreground hover:text-red-600"
+                          aria-label={`Delete ${r.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteRule(r.id);
+                            if (selectedId === r.id) {
+                              setSelectedId(null);
+                              setCreatingNew(false);
+                            }
+                          }}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    {idx < rules.length - 1 ? (
+                      <Separator className="mx-4" />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-border px-2 py-2">
+            <Collapsible defaultOpen className="border-b border-border last:border-b-0">
+              <CollapsibleTrigger className="px-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                Engine log
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pb-2">
+                <ScrollArea className="h-48 w-full rounded-md border border-border">
+                  <div className="p-3 font-mono text-xs">
+                    {engineLog.length === 0 ? (
+                      <p className="text-muted-foreground">No evaluations yet.</p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {engineLog.map((e) => (
+                          <li key={e.id} className="leading-snug">
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateTimeStable(e.timestamp)}
+                            </span>{" "}
+                            <span className="text-foreground">{e.ruleName}</span>{" "}
+                            <span className={engineLogResultClass(e)}>
+                              {engineLogResultText(e)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </ScrollArea>
+              </CollapsibleContent>
+            </Collapsible>
+
+            <Collapsible defaultOpen className="pt-2">
+              <CollapsibleTrigger className="px-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                Order attempts
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pb-2">
+                <ScrollArea className="h-48 w-full rounded-md border border-border">
+                  <div className="p-3 font-mono text-xs">
+                    {orderAttemptLog.length === 0 ? (
+                      <p className="text-muted-foreground">
+                        No order attempts yet.
                       </p>
-                      <p>
-                        <span className="font-medium text-foreground">Then</span>{" "}
-                        {actionSummary(r)}
-                      </p>
-                      <p className="font-mono text-[10px] text-muted-foreground/80">
-                        Last:{" "}
-                        {r.lastTriggered
-                          ? formatDateTimeStable(r.lastTriggered)
-                          : "never"}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {orderAttemptLog.map((o) => (
+                          <li key={o.id} className="leading-snug">
+                            <span className="text-xs text-muted-foreground">
+                              {formatDateTimeStable(o.timestamp)}
+                            </span>{" "}
+                            <span className="text-foreground">{o.ruleName}</span>{" "}
+                            <span className={orderAttemptResultClass(o)}>
+                              {o.outcome} — {o.reason}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </ScrollArea>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        </aside>
+
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden p-6">
+          {showEmptyPanel ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+              <FileSliders
+                className="size-12 text-muted-foreground/40"
+                strokeWidth={1.25}
+                aria-hidden
+              />
+              <p className="max-w-xs text-sm text-muted-foreground">
+                Select a rule to edit or create a new one
+              </p>
             </div>
+          ) : null}
 
-            <Card className="flex shrink-0 flex-col overflow-hidden py-0 shadow-none">
-              <CardHeader className="shrink-0 border-b border-border py-2">
-                <CardTitle className="text-xs font-medium">Engine log</CardTitle>
-              </CardHeader>
-              <ScrollArea className="h-[200px] w-full">
-                <div className="p-3 font-mono text-xs leading-snug">
-                  {engineLog.length === 0 ? (
-                    <p className="text-muted-foreground">No evaluations yet.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {engineLog.map((e) => (
-                        <li
-                          key={e.id}
-                          className="border-b border-border pb-2 last:border-0"
-                        >
-                          <div className="text-[10px] text-muted-foreground">
-                            {formatDateTimeStable(e.timestamp)}
-                          </div>
-                          <div className="text-foreground">{e.ruleName}</div>
-                          <div
-                            className={
-                              e.conditionMet
-                                ? "text-green-600"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            Condition: {e.conditionMet ? "met" : "not met"}
-                            {e.actionTaken !== "none"
-                              ? ` · ${e.actionTaken.replace("_", " ")}`
-                              : ""}
-                            {e.reason ? (
-                              <span className="text-red-500"> — {e.reason}</span>
-                            ) : null}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </ScrollArea>
-            </Card>
-
-            <Card className="flex shrink-0 flex-col overflow-hidden py-0 shadow-none">
-              <CardHeader className="shrink-0 border-b border-border py-2">
-                <CardTitle className="text-xs font-medium">
-                  Order attempts
-                </CardTitle>
-              </CardHeader>
-              <ScrollArea className="h-[200px] w-full">
-                <div className="p-3 font-mono text-xs leading-snug">
-                  {orderAttemptLog.length === 0 ? (
-                    <p className="text-muted-foreground">
-                      No order attempts yet.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {orderAttemptLog.map((o) => (
-                        <li
-                          key={o.id}
-                          className="border-b border-border pb-2 last:border-0"
-                        >
-                          <div className="text-[10px] text-muted-foreground">
-                            {formatDateTimeStable(o.timestamp)}
-                          </div>
-                          <div>{o.ruleName}</div>
-                          <div
-                            className={
-                              o.outcome === "placed"
-                                ? "text-green-600"
-                                : o.outcome === "failed"
-                                  ? "text-red-500"
-                                  : "text-muted-foreground"
-                            }
-                          >
-                            {o.outcome} — {o.reason}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </ScrollArea>
-            </Card>
-          </aside>
-
-          <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-none">
+          {showEditor ? (
             <Tabs
               value={editorTab}
               onValueChange={(v) => {
@@ -698,186 +736,213 @@ export default function RulesDashboard() {
               }}
               className="flex min-h-0 flex-1 flex-col gap-0"
             >
-              <div className="shrink-0 border-b border-border px-3 pt-3">
-                <TabsList variant="line" className="shadow-none">
-                  <TabsTrigger value="builder" className="text-xs shadow-none">
-                    UI Builder
-                  </TabsTrigger>
-                  <TabsTrigger value="code" className="text-xs shadow-none">
-                    Code (JSON)
-                  </TabsTrigger>
-                </TabsList>
-              </div>
+              <TabsList variant="line" className="mb-4 w-fit shrink-0 shadow-none">
+                <TabsTrigger value="builder" className="text-xs shadow-none">
+                  UI Builder
+                </TabsTrigger>
+                <TabsTrigger value="code" className="text-xs shadow-none">
+                  Code (JSON)
+                </TabsTrigger>
+              </TabsList>
 
               <TabsContent
                 value="builder"
-                className="min-h-0 flex-1 overflow-y-auto p-4 outline-none"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-y-auto outline-none"
               >
-                <Card className="mx-auto max-w-md border-border shadow-none">
-                  <CardContent className="space-y-6 p-6">
-                    <div>
-                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Rule
-                      </h3>
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-muted-foreground">
-                            Name
-                          </label>
-                          <Input
-                            value={form.name}
-                            onChange={(e) =>
-                              setForm((f) => ({ ...f, name: e.target.value }))
-                            }
-                            className="shadow-none"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-muted-foreground">
-                            Symbol
-                          </label>
+                <div className="mx-auto w-full max-w-lg space-y-6 pb-8">
+                  <div>
+                    <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                      Rule
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Name
+                        </label>
+                        <Input
+                          value={form.name}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, name: e.target.value }))
+                          }
+                          className="shadow-none"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Symbol
+                        </label>
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                           <Input
                             value={form.symbol}
                             onChange={(e) =>
                               setForm((f) => ({ ...f, symbol: e.target.value }))
                             }
                             placeholder="AAPL"
-                            className="font-mono shadow-none"
+                            className="font-mono pl-9 shadow-none"
                           />
                         </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground">
+                          Conid
+                        </label>
+                        <Input
+                          value={form.conid}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, conid: e.target.value }))
+                          }
+                          placeholder="265598"
+                          className="h-8 font-mono text-sm text-muted-foreground shadow-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                      Condition
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Type
+                        </label>
+                        <Select
+                          value={form.conditionType}
+                          onValueChange={(v) => {
+                            if (v != null) {
+                              setForm((f) => ({
+                                ...f,
+                                conditionType: v as RuleConditionType,
+                              }));
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full shadow-none" size="sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CONDITION_OPTIONS.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {showConditionNumber ? (
                         <div className="space-y-2">
                           <label className="text-sm font-medium text-muted-foreground">
-                            Conid
+                            Value
                           </label>
                           <Input
-                            value={form.conid}
+                            type="number"
+                            step="any"
+                            value={form.conditionValue}
                             onChange={(e) =>
-                              setForm((f) => ({ ...f, conid: e.target.value }))
+                              setForm((f) => ({
+                                ...f,
+                                conditionValue: e.target.value,
+                              }))
                             }
-                            placeholder="265598"
                             className="font-mono shadow-none"
                           />
                         </div>
-                      </div>
+                      ) : form.conditionType === "TIME_AT" ? (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-muted-foreground">
+                            Time
+                          </label>
+                          <Input
+                            type="time"
+                            step={60}
+                            value={form.conditionValue}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                conditionValue: e.target.value,
+                              }))
+                            }
+                            className="font-mono shadow-none"
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Uses 20-period MA on daily closes from price history.
+                        </p>
+                      )}
                     </div>
+                  </div>
 
-                    <Separator />
+                  <Separator />
 
-                    <div>
-                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Condition
-                      </h3>
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-muted-foreground">
-                            Type
-                          </label>
-                          <select
-                            value={form.conditionType}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                conditionType: e.target.value as RuleConditionType,
-                              }))
+                  <div>
+                    <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                      Action
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <span className="text-sm font-medium text-muted-foreground">
+                          Side
+                        </span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant={form.side === "long" ? "default" : "outline"}
+                            size="sm"
+                            className={cn(
+                              "shadow-none",
+                              form.side === "long" &&
+                                "border-green-600 bg-green-600 text-white hover:bg-green-600/90",
+                            )}
+                            onClick={() =>
+                              setForm((f) => ({ ...f, side: "long" }))
                             }
-                            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-none outline-none"
                           >
-                            {CONDITION_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        {showConditionNumber ? (
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground">
-                              Value
-                            </label>
-                            <Input
-                              type="number"
-                              step="any"
-                              value={form.conditionValue}
-                              onChange={(e) =>
-                                setForm((f) => ({
-                                  ...f,
-                                  conditionValue: e.target.value,
-                                }))
-                              }
-                              className="font-mono shadow-none"
-                            />
-                          </div>
-                        ) : form.conditionType === "TIME_AT" ? (
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-muted-foreground">
-                              Time (HH:MM)
-                            </label>
-                            <Input
-                              value={form.conditionValue}
-                              onChange={(e) =>
-                                setForm((f) => ({
-                                  ...f,
-                                  conditionValue: e.target.value,
-                                }))
-                              }
-                              placeholder="09:30"
-                              className="font-mono shadow-none"
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            Uses 20-period MA on daily closes from price
-                            history.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div>
-                      <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Action
-                      </h3>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-muted-foreground">
-                            Side
-                          </label>
-                          <select
-                            value={form.side}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                side: e.target.value as "long" | "short",
-                              }))
+                            Long
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={form.side === "short" ? "default" : "outline"}
+                            size="sm"
+                            className={cn(
+                              "shadow-none",
+                              form.side === "short" &&
+                                "border-red-500 bg-red-500 text-white hover:bg-red-500/90",
+                            )}
+                            onClick={() =>
+                              setForm((f) => ({ ...f, side: "short" }))
                             }
-                            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-none"
                           >
-                            <option value="long">Long</option>
-                            <option value="short">Short</option>
-                          </select>
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-muted-foreground">
-                            Order type
-                          </label>
-                          <select
-                            value={form.orderType}
-                            onChange={(e) =>
-                              setForm((f) => ({
-                                ...f,
-                                orderType: e.target.value as "MKT" | "LMT",
-                              }))
-                            }
-                            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-none"
-                          >
-                            <option value="MKT">MKT</option>
-                            <option value="LMT">LMT</option>
-                          </select>
+                            Short
+                          </Button>
                         </div>
                       </div>
-                      <div className="mt-3 space-y-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Order type
+                        </label>
+                        <Select
+                          value={form.orderType}
+                          onValueChange={(v) => {
+                            if (v === "MKT" || v === "LMT") {
+                              setForm((f) => ({ ...f, orderType: v }));
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-full shadow-none" size="sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MKT">MKT</SelectItem>
+                            <SelectItem value="LMT">LMT</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
                         <label className="text-sm font-medium text-muted-foreground">
                           Quantity
                         </label>
@@ -893,7 +958,7 @@ export default function RulesDashboard() {
                         />
                       </div>
                       {form.orderType === "LMT" ? (
-                        <div className="mt-3 space-y-2">
+                        <div className="space-y-2">
                           <label className="text-sm font-medium text-muted-foreground">
                             Limit price
                           </label>
@@ -909,53 +974,58 @@ export default function RulesDashboard() {
                         </div>
                       ) : null}
                     </div>
+                  </div>
 
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={form.enabled}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, enabled: e.target.checked }))
-                        }
-                        className="rounded border-input"
-                      />
-                      Enabled
-                    </label>
-                    {builderError ? (
-                      <p className="text-sm text-red-500">{builderError}</p>
-                    ) : null}
-                    <Button
-                      type="button"
-                      className="h-11 w-full shadow-none"
-                      onClick={handleSaveBuilder}
+                  <Separator />
+
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      id="rule-enabled"
+                      checked={form.enabled}
+                      onCheckedChange={(checked) =>
+                        setForm((f) => ({ ...f, enabled: checked }))
+                      }
+                    />
+                    <label
+                      htmlFor="rule-enabled"
+                      className="text-sm font-medium text-muted-foreground"
                     >
-                      Save rule
-                    </Button>
-                  </CardContent>
-                </Card>
+                      Rule enabled
+                    </label>
+                  </div>
+
+                  {builderError ? (
+                    <p className="text-sm text-red-500">{builderError}</p>
+                  ) : null}
+
+                  <Button
+                    type="button"
+                    className="h-11 w-full shadow-none"
+                    onClick={handleSaveBuilder}
+                  >
+                    Save rule
+                  </Button>
+                </div>
               </TabsContent>
 
               <TabsContent
                 value="code"
-                className="min-h-0 flex-1 overflow-y-auto p-4 outline-none"
+                className="mt-0 flex min-h-0 flex-1 flex-col outline-none"
               >
-                <Card className="mx-auto max-w-xl border-border shadow-none">
-                  <CardContent className="space-y-4 p-6">
-                    <p className="text-xs text-muted-foreground">
-                      Paste a full JSON object matching the Rule type. Required
-                      fields: id, name, symbol, conid, conditionType,
-                      conditionValue, action, enabled, createdAt.
-                    </p>
-                    <textarea
-                      value={jsonText}
-                      onChange={(e) => {
-                        setJsonText(e.target.value);
-                        setJsonError(null);
-                      }}
-                      rows={18}
-                      className="w-full resize-y rounded-lg border border-input bg-muted/30 p-3 font-mono text-xs shadow-none outline-none"
-                      spellCheck={false}
-                      placeholder={`{
+                <p className="mb-3 shrink-0 text-xs text-muted-foreground">
+                  Paste a full JSON object matching the Rule type. Required
+                  fields: id, name, symbol, conid, conditionType,
+                  conditionValue, action, enabled, createdAt.
+                </p>
+                <textarea
+                  value={jsonText}
+                  onChange={(e) => {
+                    setJsonText(e.target.value);
+                    setJsonError(null);
+                  }}
+                  spellCheck={false}
+                  className="min-h-[min(60vh,480px)] w-full flex-1 resize-y rounded-lg border border-border bg-muted p-4 font-mono text-xs outline-none"
+                  placeholder={`{
   "id": "…",
   "name": "RSI dip",
   "symbol": "AAPL",
@@ -966,24 +1036,25 @@ export default function RulesDashboard() {
   "enabled": true,
   "createdAt": "2026-01-01T00:00:00.000Z"
 }`}
-                    />
-                    {jsonError ? (
-                      <p className="text-sm text-red-500">{jsonError}</p>
-                    ) : null}
-                    <Button
-                      type="button"
-                      className="shadow-none"
-                      onClick={handleSaveJson}
-                    >
-                      Validate & save
-                    </Button>
-                  </CardContent>
-                </Card>
+                />
+                {jsonError ? (
+                  <p className="mt-2 shrink-0 text-sm text-red-500">{jsonError}</p>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 w-full shrink-0 shadow-none sm:w-auto"
+                  onClick={handleSaveJson}
+                >
+                  Validate & save
+                </Button>
               </TabsContent>
             </Tabs>
-          </main>
-        </div>
+          ) : null}
+        </main>
       </div>
     </div>
   );
+
 }

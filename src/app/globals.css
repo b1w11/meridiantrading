@@ -1,5 +1,12 @@
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+/* Tailwind v4 default @theme tokens (--spacing, --text-*, --font-weight-*, …). Without this,
+   a prior @theme inline (e.g. from tw-animate-css) can prevent those defaults from applying,
+   so utilities like h-12, text-sm, font-medium, px-2.5, gap-1.5 are never emitted. */
+@layer theme, base, components, utilities;
+@import "../../node_modules/@tailwindcss/postcss/node_modules/tailwindcss/theme.css" layer(theme);
+
+/* Bare package imports fail under Turbopack (exports use `style` only). */
+@import "../../node_modules/tw-animate-css/dist/tw-animate.css";
+@import "../../node_modules/shadcn/dist/tailwind.css";
 
 @tailwind base;
 

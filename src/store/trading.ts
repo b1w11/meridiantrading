@@ -23,17 +23,21 @@ type TradingState = {
   activeTicker: string;
   chartType: ChartType;
   watchlistEntries: WatchlistEntry[];
+  /** From GET /api/ibkr/me (server-only IBKR_ACCOUNT_ID); undefined until loaded or if unset. */
+  ibkrAccountId: string | undefined;
   setActiveTicker: (ticker: string) => void;
   setChartType: (t: ChartType) => void;
   setWatchlistEntries: (entries: WatchlistEntry[]) => void;
   /** Returns false if symbol already present (case-insensitive). */
   addWatchlistEntry: (entry: WatchlistEntry) => boolean;
+  setIbkrAccountFromMe: (accountId: string | undefined) => void;
 };
 
 export const useTradingStore = create<TradingState>((set, get) => ({
   activeTicker: "AAPL",
   chartType: "candlestick",
   watchlistEntries: WATCHLIST_ENTRIES.map((e) => ({ ...e })),
+  ibkrAccountId: undefined,
   setActiveTicker: (activeTicker) => set({ activeTicker }),
   setChartType: (chartType) => set({ chartType }),
   setWatchlistEntries: (watchlistEntries) => {
@@ -56,6 +60,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     set({ watchlistEntries: next });
     return true;
   },
+  setIbkrAccountFromMe: (accountId) => set({ ibkrAccountId: accountId }),
 }));
 
 export function loadWatchlistFromStorage(): WatchlistEntry[] | null {

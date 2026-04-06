@@ -7,7 +7,6 @@ import { signOut, useSession } from "next-auth/react";
 import useSWR from "swr";
 
 import { Button } from "@/components/ui/button";
-import { useMeridianTheme } from "@/components/ThemeProvider";
 import { formatPriceStable } from "@/lib/format-display";
 import { parsePricesResponse } from "@/lib/prices-response";
 import { cn } from "@/lib/utils";
@@ -20,43 +19,6 @@ async function tickerFetcher(url: string) {
     throw new Error(text.trim() || `Request failed (${res.status})`);
   }
   return parsePricesResponse(JSON.parse(text) as unknown);
-}
-
-function SunIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  );
 }
 
 /** Single stroke “M” mark — avoids a text node that reads as a second “M” before “Meridian”. */
@@ -84,8 +46,8 @@ function MonogramIcon() {
 export function Topbar() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
-  const { theme, toggleTheme, ready: themeReady } = useMeridianTheme();
   const watchlistEntries = useTradingStore((s) => s.watchlistEntries);
+  const ibkrAccountId = useTradingStore((s) => s.ibkrAccountId);
   const [mounted, setMounted] = useState(false);
   const [online, setOnline] = useState(true);
 
@@ -116,11 +78,6 @@ export function Topbar() {
     refreshInterval: 30_000,
     revalidateOnFocus: false,
   });
-
-  const ibkrAccountId =
-    typeof process.env.NEXT_PUBLIC_IBKR_ACCOUNT_ID === "string"
-      ? process.env.NEXT_PUBLIC_IBKR_ACCOUNT_ID.trim() || undefined
-      : undefined;
 
   const connected =
     mounted &&
@@ -177,7 +134,7 @@ export function Topbar() {
             <Fragment key={symbol}>
               {i > 0 ? (
                 <span
-                  className="mx-2 shrink-0 select-none text-gray-300 dark:text-neutral-600"
+                  className="mx-2 shrink-0 select-none text-gray-300"
                   aria-hidden
                 >
                   |
@@ -195,8 +152,8 @@ export function Topbar() {
                     className={cn(
                       "rounded px-1.5 py-0.5 font-mono text-[10px] font-medium tabular-nums",
                       pos
-                        ? "bg-green-50 text-green-600 dark:bg-green-950/40 dark:text-green-400"
-                        : "bg-red-50 text-red-500 dark:bg-red-950/40 dark:text-red-400",
+                        ? "bg-green-50 text-green-600"
+                        : "bg-red-50 text-red-500",
                     )}
                   >
                     {pos ? "+" : ""}
@@ -254,21 +211,6 @@ export function Topbar() {
           </span>
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="size-8 shadow-none"
-          onClick={() => toggleTheme()}
-          aria-label={
-            themeReady && theme === "dark"
-              ? "Switch to light mode"
-              : "Switch to dark mode"
-          }
-        >
-          {themeReady && theme === "dark" ? <SunIcon /> : <MoonIcon />}
-        </Button>
-
         {ibkrAccountId ? (
           <span
             className="hidden max-w-[100px] truncate font-mono text-[11px] text-muted-foreground xl:inline"
@@ -291,7 +233,7 @@ export function Topbar() {
           type="button"
           variant="ghost"
           size="sm"
-          className="text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
+          className="text-red-500 hover:bg-red-50 hover:text-red-600"
           onClick={() => void signOut({ callbackUrl: "/login" })}
         >
           Sign out
