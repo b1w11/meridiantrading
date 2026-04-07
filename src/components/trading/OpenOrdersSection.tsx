@@ -46,13 +46,19 @@ export function OpenOrdersSection({
 }: OpenOrdersSectionProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancellingAll, setCancellingAll] = useState(false);
+  const [orderActionError, setOrderActionError] = useState<string | null>(null);
 
   const handleCancelOne = useCallback(
     async (orderId: string) => {
+      setOrderActionError(null);
       setCancellingId(orderId);
       try {
         await deleteIbkrOrderRequest(orderId, accountId);
         await onRefresh();
+      } catch (e) {
+        setOrderActionError(
+          e instanceof Error ? e.message : "Cancel request failed",
+        );
       } finally {
         setCancellingId(null);
       }
@@ -61,10 +67,15 @@ export function OpenOrdersSection({
   );
 
   const handleCancelAll = useCallback(async () => {
+    setOrderActionError(null);
     setCancellingAll(true);
     try {
       await cancelAllCancellableOrders(orders, accountId);
       await onRefresh();
+    } catch (e) {
+      setOrderActionError(
+        e instanceof Error ? e.message : "Cancel all failed",
+      );
     } finally {
       setCancellingAll(false);
     }
@@ -92,6 +103,11 @@ export function OpenOrdersSection({
         </Button>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        {orderActionError ? (
+          <p className="border-b border-border bg-red-50 px-4 py-2 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">
+            {orderActionError}
+          </p>
+        ) : null}
         {error ? (
           <p className="p-4 text-sm text-red-500">{error.message}</p>
         ) : isLoading ? (

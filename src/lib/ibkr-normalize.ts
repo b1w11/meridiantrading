@@ -1,5 +1,7 @@
 import type { PositionRow } from "@/hooks/useIBKR";
 
+import { isLikelyYahooTicker } from "@/lib/symbol-validation";
+
 export type PnlSummary = {
   totalPnL: number;
   dayPnL: number;
@@ -25,6 +27,15 @@ function pick(
   return 0;
 }
 
+function pickTrimmedString(...vals: unknown[]): string {
+  for (const v of vals) {
+    if (typeof v !== "string") continue;
+    const t = v.trim();
+    if (t) return t;
+  }
+  return "";
+}
+
 /** Normalize CP Web API portfolio positions payload. */
 export function normalizePositions(data: unknown): PositionRow[] {
   if (!Array.isArray(data)) return [];
@@ -36,20 +47,85 @@ export function normalizePositions(data: unknown): PositionRow[] {
       r.contract && typeof r.contract === "object"
         ? (r.contract as Record<string, unknown>)
         : undefined;
-    const symbol = String(
-      contract?.symbol ?? r.symbol ?? r.ticker ?? r.desc1 ?? "?",
+    const conidRaw = num(r.conid ?? contract?.conid);
+    const conid =
+      Number.isFinite(conidRaw) && conidRaw !== 0 ? conidRaw : undefined;
+
+    let symbol = pickTrimmedString(
+      contract?.symbol,
+      contract?.localSymbol,
+      r.localSymbol,
+      r.symbol,
+      r.ticker,
+      r.und_sym,
     );
+    if (!symbol) {
+      const d1 = pickTrimmedString(r.desc1);
+      if (d1 && isLikelyYahooTicker(d1)) symbol = d1;
+    }
+    if (!symbol && conid != null) symbol = `#${conid}`;
+    if (!symbol) continue;
+
     const qtyRaw = num(r.position ?? r.pos ?? r.positionAmt);
-    if (qtyRaw === 0 && !symbol) continue;
     const qty = Math.abs(qtyRaw);
+    if (qty < 1e-12) continue;
     const side = qtyRaw < 0 ? "short" : "long";
     const avgCost = num(r.avgCost ?? r.avgPrice ?? r.averageCost);
     const unrealizedPnL = num(
       r.unrealizedPnl ?? r.unrealizedPNL ?? r.mtmPnl ?? r.fifoPnlUnrealized,
     );
-    rows.push({ symbol, quantity: qty, avgCost, side, unrealizedPnL });
+    rows.push({
+      symbol,
+      ...(conid != null ? { conid } : {}),
+      quantity: qty,
+      avgCost,
+      side,
+      unrealizedPnL,
+    });
   }
   return rows;
+}
+
+const PNL_UPL_KEYS = [
+  "upl",
+  "unrealizedPnL",
+  "unrealized_pnl",
+  "mtm",
+  "fifoPnlUnrealized",
+] as const;
+
+const PNL_DPL_KEYS = [
+  "dpl",
+  "dailyPnL",
+  "dayPnL",
+  "realizedToday",
+] as const;
+
+const PNL_NL_KEYS = [
+  "nl",
+  "nlv",
+  "netLiquidation",
+  "total",
+  "totalPnL",
+] as const;
+
+/** CP `/iserver/account/pnl/partitioned` often returns `{ upnl: { [acctId]: { upl, dpl, nl, ... } } }`. */
+function sumPartitionedUpnlMap(
+  map: Record<string, unknown>,
+): { dayPnL: number; unrealizedPnL: number; totalPnL: number; segments: number } {
+  let dayPnL = 0;
+  let unrealizedPnL = 0;
+  let totalPnL = 0;
+  let segments = 0;
+  for (const v of Object.values(map)) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+    const seg = v as Record<string, unknown>;
+    dayPnL += pick(seg, [...PNL_DPL_KEYS]);
+    unrealizedPnL += pick(seg, [...PNL_UPL_KEYS]);
+    totalPnL += pick(seg, [...PNL_NL_KEYS]);
+    segments += 1;
+  }
+  return { dayPnL, unrealizedPnL, totalPnL, segments };
 }
 
 /** Normalize partitioned P&L (array of segments with `summary` or flat object). */
@@ -68,19 +144,32 @@ export function normalizePnl(data: unknown): PnlSummary {
         s.summary && typeof s.summary === "object"
           ? (s.summary as Record<string, unknown>)
           : s;
-      dayPnL += pick(summary, ["dpl", "dailyPnL", "dayPnL", "realizedToday"]);
-      unrealizedPnL += pick(summary, ["upl", "unrealizedPnL", "mtm", "fifoPnlUnrealized"]);
-      totalPnL += pick(summary, ["nl", "nlv", "netLiquidation", "total"]);
+      dayPnL += pick(summary, [...PNL_DPL_KEYS]);
+      unrealizedPnL += pick(summary, [...PNL_UPL_KEYS]);
+      totalPnL += pick(summary, [...PNL_NL_KEYS]);
     }
     return { totalPnL, dayPnL, unrealizedPnL };
   }
 
   if (typeof data === "object") {
     const o = data as Record<string, unknown>;
+    const upnl = o.upnl;
+    if (upnl && typeof upnl === "object" && !Array.isArray(upnl)) {
+      const nested = sumPartitionedUpnlMap(upnl as Record<string, unknown>);
+      if (nested.segments > 0) {
+        return {
+          totalPnL:
+            nested.totalPnL || pick(o, [...PNL_NL_KEYS]),
+          dayPnL:
+            nested.dayPnL || pick(o, ["dpl", "dailyPnL", "dayPnL"]),
+          unrealizedPnL: nested.unrealizedPnL,
+        };
+      }
+    }
     return {
-      totalPnL: pick(o, ["nlv", "netLiquidation", "nl", "totalPnL"]),
+      totalPnL: pick(o, [...PNL_NL_KEYS]),
       dayPnL: pick(o, ["dpl", "dailyPnL", "dayPnL"]),
-      unrealizedPnL: pick(o, ["upl", "unrealizedPnL", "mtm"]),
+      unrealizedPnL: pick(o, [...PNL_UPL_KEYS]),
     };
   }
 
@@ -163,29 +252,119 @@ function strVal(v: unknown): string {
   return String(v);
 }
 
+function formatOrderInstant(d: Date): string {
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+/**
+ * CP Web API often sends `orderTime` as compact digits `YYMMDDhhmmss` (12 chars) or
+ * `YYYYMMDDHHmmss` (14 chars), not Unix epoch. Those components are **UTC**; using the local
+ * `Date(y,m,d,h,m,s)` constructor shifts them (e.g. −2h in CEST vs UTC).
+ */
+function parseCompactOrderDigits(intStr: string): Date | null {
+  const s = intStr.replace(/^-/, "");
+  if (!/^\d+$/.test(s)) return null;
+
+  if (s.length === 12) {
+    const yy = Number(s.slice(0, 2));
+    const month = Number(s.slice(2, 4)) - 1;
+    const day = Number(s.slice(4, 6));
+    const h = Number(s.slice(6, 8));
+    const m = Number(s.slice(8, 10));
+    const sec = Number(s.slice(10, 12));
+    if (
+      !Number.isFinite(yy) ||
+      month < 0 ||
+      month > 11 ||
+      day < 1 ||
+      day > 31
+    ) {
+      return null;
+    }
+    const fullYear = yy >= 70 ? 1900 + yy : 2000 + yy;
+    const ms = Date.UTC(fullYear, month, day, h, m, sec);
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  if (s.length === 14) {
+    const fullYear = Number(s.slice(0, 4));
+    const month = Number(s.slice(4, 6)) - 1;
+    const day = Number(s.slice(6, 8));
+    const h = Number(s.slice(8, 10));
+    const m = Number(s.slice(10, 12));
+    const sec = Number(s.slice(12, 14));
+    if (
+      fullYear < 1970 ||
+      fullYear > 2100 ||
+      month < 0 ||
+      month > 11 ||
+      day < 1 ||
+      day > 31
+    ) {
+      return null;
+    }
+    const ms = Date.UTC(fullYear, month, day, h, m, sec);
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
+}
+
 function formatOrderTime(raw: unknown): string {
   if (raw == null || raw === "") return "—";
+
+  const tryInstant = (d: Date): string | null =>
+    Number.isNaN(d.getTime()) ? null : formatOrderInstant(d);
+
   if (typeof raw === "number" && Number.isFinite(raw)) {
-    const ms = raw > 1e12 ? raw : raw * 1000;
-    const d = new Date(ms);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
+    const n = raw;
+    const intStr = String(Math.trunc(Math.abs(n)));
+    const compact = parseCompactOrderDigits(intStr);
+    if (compact) {
+      const s = tryInstant(compact);
+      if (s) return s;
+    }
+    if (n >= 1e12 && n < 1e15) {
+      const s = tryInstant(new Date(n));
+      if (s) return s;
+    }
+    if (n >= 1_000_000_000 && n < 1e12) {
+      const s = tryInstant(new Date(n * 1000));
+      if (s) return s;
+    }
+    return "—";
   }
-  const s = String(raw).trim();
-  if (!s) return "—";
-  const n = Number(s);
-  if (Number.isFinite(n) && /^-?\d+\.?\d*$/.test(s)) {
+
+  const str = String(raw).trim();
+  if (!str) return "—";
+
+  const compactFromStr = parseCompactOrderDigits(str.replace(/\s+/g, ""));
+  if (compactFromStr) {
+    const s = tryInstant(compactFromStr);
+    if (s) return s;
+  }
+
+  const parsed = Date.parse(str);
+  if (!Number.isNaN(parsed)) {
+    const s = tryInstant(new Date(parsed));
+    if (s) return s;
+  }
+
+  const n = Number(str);
+  if (Number.isFinite(n) && /^-?\d+(?:\.\d+)?$/.test(str)) {
     return formatOrderTime(n);
   }
-  return s;
+  return str;
 }
 
 function unwrapOrderList(data: unknown): unknown[] {
@@ -208,20 +387,26 @@ export function normalizeLiveOrders(data: unknown): LiveOrderRow[] {
     if (!raw || typeof raw !== "object") continue;
     const o = raw as Record<string, unknown>;
     const orderId = strVal(
-      o.orderId ?? o.order_id ?? o.id ?? o.permId ?? o.ticket_id,
+      o.orderId ??
+        o.order_id ??
+        o.id ??
+        o.ticket ??
+        o.permId ??
+        o.ticket_id,
     );
     const contract =
       o.contract && typeof o.contract === "object"
         ? (o.contract as Record<string, unknown>)
         : undefined;
+    /** Avoid `conidex` — it is a composite id, not a display symbol (wrong labels vs conid). */
     const symbol = strVal(
       contract?.symbol ??
+        contract?.localSymbol ??
         o.symbol ??
         o.ticker ??
         o.description1 ??
         o.desc1 ??
-        o.contractDesc ??
-        o.conidex,
+        o.contractDesc,
     );
     const sideRaw = strVal(o.side).toUpperCase();
     const side =

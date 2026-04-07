@@ -1,4 +1,4 @@
-import { ensureIbkrDevTls, gatewayUrl } from "@/lib/ibkr-gateway";
+import { fetchGatewayWithSession } from "@/lib/ibkr-gateway";
 
 export type IBKROrder = {
   acctId: string;
@@ -17,8 +17,7 @@ export async function gatewayFetch<T>(
   path: string,
   init?: { method?: string; body?: unknown },
 ): Promise<T> {
-  ensureIbkrDevTls();
-  const res = await fetch(gatewayUrl(path), {
+  const res = await fetchGatewayWithSession(path, {
     method: init?.method ?? "GET",
     headers: { "Content-Type": "application/json" },
     body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,

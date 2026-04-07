@@ -55,12 +55,47 @@ import {
   type ChartTimeframe,
 } from "@/lib/chart-history";
 import { formatMoneyStable } from "@/lib/format-display";
+import { parseFirstSearchConid } from "@/lib/ibkr-symbol-search";
 import { parsePricesResponse } from "@/lib/prices-response";
-import { conidForSymbol } from "@/lib/watchlist-constants";
+import { isLikelyYahooTicker } from "@/lib/symbol-validation";
+import {
+  conidForSymbol,
+  type WatchlistEntry,
+} from "@/lib/watchlist-constants";
 import {
   loadWatchlistFromStorage,
   useTradingStore,
 } from "@/store/trading";
+
+/**
+ * Prefer a fresh secdef search so the placed order matches the symbol in the form.
+ * Stale or wrong `conid` values in localStorage/watchlist caused orders under another ticker.
+ */
+async function resolveOrderConid(
+  symbol: string,
+  entries: WatchlistEntry[],
+): Promise<number | undefined> {
+  const sym = symbol.trim();
+  if (!sym) return undefined;
+  try {
+    const res = await fetch(
+      `/api/ibkr/search?symbol=${encodeURIComponent(sym)}`,
+    );
+    let data: unknown = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    if (res.ok && data != null) {
+      const row = parseFirstSearchConid(data);
+      if (row != null) return row.conid;
+    }
+  } catch {
+    /* fall back */
+  }
+  return conidForSymbol(sym, entries);
+}
 
 async function jsonFetcher<T>(url: string): Promise<T> {
   const res = await fetch(url);
@@ -130,12 +165,20 @@ function PositionsSection({
   error: Error | undefined;
   pnl: PnlSummary;
 }) {
-  const unreal = pnl.unrealizedPnL;
+  const sumRowUpl = positions.reduce((acc, p) => acc + p.unrealizedPnL, 0);
+  const unreal =
+    positions.length > 0 ? sumRowUpl : pnl.unrealizedPnL;
   const unrealPos = unreal >= 0;
 
   const symbolsParam = useMemo(
     () =>
-      [...new Set(positions.map((p) => p.symbol).filter(Boolean))].join(","),
+      [
+        ...new Set(
+          positions
+            .map((p) => p.symbol)
+            .filter((s) => isLikelyYahooTicker(s)),
+        ),
+      ].join(","),
     [positions],
   );
 
@@ -213,14 +256,18 @@ function PositionsSection({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {positions.map((p) => {
+                {positions.map((p, rowIndex) => {
                   const lastPx = priceData?.prices[p.symbol];
                   const hasLast =
                     typeof lastPx === "number" &&
                     Number.isFinite(lastPx) &&
                     lastPx !== 0;
+                  const rowKey =
+                    p.conid != null && p.conid !== 0
+                      ? `pos-${p.conid}-${p.side}`
+                      : `pos-${p.symbol}-${p.side}-${rowIndex}`;
                   return (
-                    <TableRow key={`${p.symbol}-${p.side}`}>
+                    <TableRow key={rowKey}>
                       <TableCell className="truncate font-medium">
                         {p.symbol}
                       </TableCell>
@@ -571,14 +618,14 @@ export default function TradingDashboard() {
       setOrderFeedback(null);
       setOrderSubmitting(true);
       try {
-        const conid = conidForSymbol(
+        const conid = await resolveOrderConid(
           values.symbol,
           useTradingStore.getState().watchlistEntries,
         );
         if (conid == null) {
           setOrderFeedback({
             kind: "error",
-            text: "Unknown symbol for this watchlist.",
+            text: "Could not resolve contract for that symbol.",
           });
           return;
         }

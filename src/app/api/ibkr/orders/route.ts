@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import {
-  gatewayUrl,
+  fetchGatewayWithSession,
   ensureIbkrDevTls,
-  passthroughResponse,
+  proxyGateway,
   requireIbkrAccountId,
 } from "@/lib/ibkr-gateway";
 
@@ -17,9 +17,7 @@ export async function GET(request: NextRequest) {
     : "/v1/api/iserver/account/orders";
 
   try {
-    ensureIbkrDevTls();
-    const upstream = await fetch(gatewayUrl(path), { method: "GET" });
-    return passthroughResponse(upstream);
+    return await proxyGateway(path, { method: "GET" });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Gateway request failed";
     return NextResponse.json({ error: message }, { status: 502 });
@@ -154,7 +152,7 @@ export async function POST(request: NextRequest) {
 
   try {
     ensureIbkrDevTls();
-    const upstream = await fetch(gatewayUrl(path), {
+    const upstream = await fetchGatewayWithSession(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orders: [order] }),
@@ -181,8 +179,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(data as object);
       }
 
-      const replyRes = await fetch(
-        gatewayUrl(`/v1/api/iserver/reply/${encodeURIComponent(replyId)}`),
+      const replyRes = await fetchGatewayWithSession(
+        `/v1/api/iserver/reply/${encodeURIComponent(replyId)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -231,9 +229,7 @@ export async function DELETE(request: NextRequest) {
   const path = `/v1/api/iserver/account/${encodeURIComponent(accountId)}/order/${encodeURIComponent(orderId.trim())}`;
 
   try {
-    ensureIbkrDevTls();
-    const upstream = await fetch(gatewayUrl(path), { method: "DELETE" });
-    return passthroughResponse(upstream);
+    return await proxyGateway(path, { method: "DELETE" });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Gateway request failed";
     return NextResponse.json({ error: message }, { status: 502 });

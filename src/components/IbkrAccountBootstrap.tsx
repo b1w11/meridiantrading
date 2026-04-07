@@ -12,6 +12,8 @@ export function IbkrAccountBootstrap() {
     let cancelled = false;
     (async () => {
       try {
+        // Primes IBKR CP session (GET /iserver/accounts) before other parallel SWR calls.
+        await fetch("/api/ibkr/accounts", { method: "GET" }).catch(() => {});
         const res = await fetch("/api/ibkr/me");
         if (!res.ok) {
           if (!cancelled) setIbkrAccountFromMe(undefined);

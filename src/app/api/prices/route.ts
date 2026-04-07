@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { isLikelyYahooTicker } from "@/lib/symbol-validation";
+
 export const dynamic = "force-dynamic";
 
 const YAHOO_SPARK =
@@ -80,15 +82,14 @@ export async function GET(request: NextRequest) {
   const symbolList = symbols
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter(isLikelyYahooTicker);
   if (symbolList.length === 0) {
-    return NextResponse.json(
-      { error: "No symbols provided" },
-      { status: 400 },
-    );
+    return NextResponse.json({});
   }
 
-  const url = `${YAHOO_SPARK}&symbols=${encodeURIComponent(symbols)}`;
+  const symbolQuery = symbolList.join(",");
+  const url = `${YAHOO_SPARK}&symbols=${encodeURIComponent(symbolQuery)}`;
 
   try {
     const upstream = await fetch(url, {
